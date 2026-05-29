@@ -3,11 +3,15 @@ name: Autobuild Check Logic Test
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   check_autobuild_logic:
     name: Check Autobuild Should Run Logic
     runs-on: ubuntu-latest
     env:
+      GH_TOKEN: ${{ github.token }}
       TAG_NAME: custom-autobuild
     steps:
       - name: Checkout repository

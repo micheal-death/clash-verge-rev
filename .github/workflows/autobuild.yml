@@ -601,6 +601,9 @@ jobs:
         run: node scripts/telegram.mjs
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID_RELEASE: ${{ vars.TELEGRAM_CHAT_ID_RELEASE }}
+          TELEGRAM_CHAT_ID_TEST: ${{ vars.TELEGRAM_CHAT_ID_TEST }}
           BUILD_TYPE: custom-autobuild
           VERSION: ${{ env.VERSION }}
           DOWNLOAD_URL: ${{ env.DOWNLOAD_URL }}

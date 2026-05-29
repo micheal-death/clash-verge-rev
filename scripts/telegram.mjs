@@ -4,8 +4,12 @@ import axios from 'axios'
 
 import { log_error, log_info, log_success } from './utils.mjs'
 
-const CHAT_ID_RELEASE = '@clash_verge_re' // 正式发布频道
-const CHAT_ID_TEST = '@vergetest' // 测试频道
+const CHAT_ID_RELEASE =
+  process.env.TELEGRAM_CHAT_ID_RELEASE ||
+  process.env.CHAT_ID_RELEASE ||
+  '@clash_verge_re' // 正式发布频道
+const CHAT_ID_TEST =
+  process.env.TELEGRAM_CHAT_ID_TEST || process.env.CHAT_ID_TEST || '@vergetest' // 测试频道
 
 async function sendTelegramNotification() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -32,7 +36,9 @@ async function sendTelegramNotification() {
   const downloadUrl =
     process.env.DOWNLOAD_URL ||
     `https://github.com/${repository}/releases/download/${releaseTag}`
-  const chatId = isAutobuild ? CHAT_ID_TEST : CHAT_ID_RELEASE
+  const chatId =
+    process.env.TELEGRAM_CHAT_ID ||
+    (isAutobuild ? CHAT_ID_TEST : CHAT_ID_RELEASE)
   const buildType = isAutobuild ? '滚动更新版' : '正式版'
 
   log_info(`Preparing Telegram notification for ${buildType} ${version}`)
