@@ -19,12 +19,19 @@ async function sendTelegramNotification() {
       return JSON.parse(pkg).version
     })()
 
+  const isAutobuild =
+    process.env.BUILD_TYPE?.includes('autobuild') ||
+    version.includes('autobuild')
+  const repository =
+    process.env.GITHUB_REPOSITORY || 'clash-verge-rev/clash-verge-rev'
+  const autobuildTag = process.env.BUILD_TYPE?.includes('autobuild')
+    ? process.env.BUILD_TYPE
+    : 'autobuild'
+  const releaseTag =
+    process.env.RELEASE_TAG || (isAutobuild ? autobuildTag : `v${version}`)
   const downloadUrl =
     process.env.DOWNLOAD_URL ||
-    `https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v${version}`
-
-  const isAutobuild =
-    process.env.BUILD_TYPE === 'autobuild' || version.includes('autobuild')
+    `https://github.com/${repository}/releases/download/${releaseTag}`
   const chatId = isAutobuild ? CHAT_ID_TEST : CHAT_ID_RELEASE
   const buildType = isAutobuild ? '滚动更新版' : '正式版'
 
@@ -110,9 +117,9 @@ async function sendTelegramNotification() {
   )
 
   const releaseTitle = isAutobuild ? '滚动更新版发布' : '正式发布'
-  const encodedVersion = encodeURIComponent(version)
-  const releaseTag = isAutobuild ? 'autobuild' : `v${version}`
-  const content = `<b>🎉 <a href="https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/${releaseTag}">Clash Verge Rev v${version}</a> ${releaseTitle}</b>\n\n${formattedContent}`
+  const encodedReleaseTag = encodeURIComponent(releaseTag)
+  const releaseUrl = `https://github.com/${repository}/releases/tag/${encodedReleaseTag}`
+  const content = `<b>🎉 <a href="${releaseUrl}">Clash Verge Rev v${version}</a> ${releaseTitle}</b>\n\n${formattedContent}`
 
   // 发送到 Telegram
   try {
@@ -123,7 +130,7 @@ async function sendTelegramNotification() {
         text: content,
         link_preview_options: {
           is_disabled: false,
-          url: `https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/v${encodedVersion}`,
+          url: releaseUrl,
           prefer_large_media: true,
         },
         parse_mode: 'HTML',
