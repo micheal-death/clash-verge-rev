@@ -438,6 +438,8 @@ export const translationKeys = [
   'rules.page.table.value',
   'rules.page.table.policy',
   'rules.page.table.source',
+  'rules.page.table.enableRule',
+  'rules.page.table.disableRule',
   'rules.page.sources.manual',
   'rules.page.sources.runtime',
   'rules.page.policyGroups.builtin',

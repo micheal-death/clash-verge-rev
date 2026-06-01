@@ -298,6 +298,38 @@ export const RulesEditorViewer = (props: Props) => {
     [appendSeq, match],
   )
 
+  const hasOriginalRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    return ruleList.some(
+      (rule) => getRawRuleIdentitySignature(rule) === signature,
+    )
+  }
+
+  const addDeleteSeqRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    setDeleteSeq((prev) =>
+      prev.some((item) => getRawRuleIdentitySignature(item) === signature)
+        ? prev
+        : [...prev, raw],
+    )
+  }
+
+  const removeDeleteSeqRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    setDeleteSeq((prev) =>
+      prev.filter((item) => getRawRuleIdentitySignature(item) !== signature),
+    )
+  }
+
+  const syncDeleteSeqForManualRule = (raw: string, enabled: boolean) => {
+    if (!enabled || hasOriginalRule(raw)) {
+      addDeleteSeqRule(raw)
+      return
+    }
+
+    removeDeleteSeqRule(raw)
+  }
+
   const renderItem = (index: number): React.ReactNode => {
     const shift = filteredPrependSeq.length > 0 ? 1 : 0
     if (filteredPrependSeq.length > 0 && index === 0) {
@@ -320,27 +352,19 @@ export const RulesEditorViewer = (props: Props) => {
                   ruleRaw={item.raw}
                   enabled={item.enabled}
                   onToggleEnabled={(enabled) => {
-                    const signature = getRawRuleIdentitySignature(item.raw)
                     setPrependSeq((prev) =>
                       prev.map((rule) =>
                         rule.raw === item.raw ? { ...rule, enabled } : rule,
                       ),
                     )
-                    if (!enabled) {
-                      setDeleteSeq((prev) =>
-                        prev.some(
-                          (raw) =>
-                            getRawRuleIdentitySignature(raw) === signature,
-                        )
-                          ? prev
-                          : [...prev, item.raw],
-                      )
-                    }
+                    syncDeleteSeqForManualRule(item.raw, enabled)
                   }}
                   onDelete={() => {
-                    setPrependSeq((prev) =>
-                      prev.filter((v) => v.raw !== item.raw),
+                    const nextPrependSeq = prependSeq.filter(
+                      (v) => v.raw !== item.raw,
                     )
+                    setPrependSeq(nextPrependSeq)
+                    removeDeleteSeqRule(item.raw)
                   }}
                 />
               )
@@ -362,19 +386,9 @@ export const RulesEditorViewer = (props: Props) => {
           ruleRaw={ruleRaw}
           onDelete={() => {
             if (isDeleted) {
-              setDeleteSeq((prev) =>
-                prev.filter(
-                  (raw) => getRawRuleIdentitySignature(raw) !== ruleSignature,
-                ),
-              )
+              removeDeleteSeqRule(ruleRaw)
             } else {
-              setDeleteSeq((prev) =>
-                prev.some(
-                  (raw) => getRawRuleIdentitySignature(raw) === ruleSignature,
-                )
-                  ? prev
-                  : [...prev, ruleRaw],
-              )
+              addDeleteSeqRule(ruleRaw)
             }
           }}
         />
@@ -399,27 +413,19 @@ export const RulesEditorViewer = (props: Props) => {
                   ruleRaw={item.raw}
                   enabled={item.enabled}
                   onToggleEnabled={(enabled) => {
-                    const signature = getRawRuleIdentitySignature(item.raw)
                     setAppendSeq((prev) =>
                       prev.map((rule) =>
                         rule.raw === item.raw ? { ...rule, enabled } : rule,
                       ),
                     )
-                    if (!enabled) {
-                      setDeleteSeq((prev) =>
-                        prev.some(
-                          (raw) =>
-                            getRawRuleIdentitySignature(raw) === signature,
-                        )
-                          ? prev
-                          : [...prev, item.raw],
-                      )
-                    }
+                    syncDeleteSeqForManualRule(item.raw, enabled)
                   }}
                   onDelete={() => {
-                    setAppendSeq((prev) =>
-                      prev.filter((v) => v.raw !== item.raw),
+                    const nextAppendSeq = appendSeq.filter(
+                      (v) => v.raw !== item.raw,
                     )
+                    setAppendSeq(nextAppendSeq)
+                    removeDeleteSeqRule(item.raw)
                   }}
                 />
               )

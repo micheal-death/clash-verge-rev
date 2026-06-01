@@ -540,7 +540,13 @@ const RuleTableRow = (props: RuleRowProps) => {
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
         onChange={(event) => onToggleEnabled(row, event.target.checked)}
-        slotProps={{ input: { 'aria-label': 'Toggle rule enabled state' } }}
+        slotProps={{
+          input: {
+            'aria-label': row.enabled
+              ? t('rules.page.table.disableRule')
+              : t('rules.page.table.enableRule'),
+          },
+        }}
         sx={{ p: 0.5, justifySelf: 'flex-start' }}
       />
       <Typography
@@ -1805,6 +1811,7 @@ const RulesPage = () => {
           next[targetRow.source],
           insertIndex,
           raw,
+          targetRow.enabled,
         )
       } else {
         next.prepend.unshift(createManualRuleItem(raw))

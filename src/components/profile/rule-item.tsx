@@ -10,6 +10,8 @@ import {
   alpha,
   styled,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
+
 interface Props {
   type: 'prepend' | 'original' | 'delete' | 'append'
   ruleRaw: string
@@ -20,6 +22,7 @@ interface Props {
 
 export const RuleItem = (props: Props) => {
   const { type, ruleRaw, enabled = true, onToggleEnabled, onDelete } = props
+  const { t } = useTranslation()
   const sortable = type === 'prepend' || type === 'append'
   const rule = ruleRaw.replace(',no-resolve', '')
 
@@ -74,7 +77,13 @@ export const RuleItem = (props: Props) => {
           checked={enabled}
           onClick={(event) => event.stopPropagation()}
           onChange={(event) => onToggleEnabled(event.target.checked)}
-          slotProps={{ input: { 'aria-label': 'Toggle rule enabled state' } }}
+          slotProps={{
+            input: {
+              'aria-label': enabled
+                ? t('rules.page.table.disableRule')
+                : t('rules.page.table.enableRule'),
+            },
+          }}
           sx={{ alignSelf: 'center', mr: 1, p: 0.5 }}
         />
       ) : null}
