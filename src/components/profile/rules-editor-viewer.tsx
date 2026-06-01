@@ -52,6 +52,14 @@ import type { TranslationKey } from '@/types/generated/i18n-keys'
 import type { MonacoEditorInstance } from '@/types/monaco'
 import getSystem from '@/utils/get-system'
 import { isValidIpCidr } from '@/utils/network'
+import {
+  createManualRuleItem,
+  dumpManualRules,
+  getRawRuleIdentitySignature,
+  normalizeManualRules,
+  sanitizeManualRules,
+  type ManualRuleItem,
+} from '@/utils/rule-utils'
 
 interface Props {
   groupsUid: string
@@ -273,12 +281,12 @@ export const RulesEditorViewer = (props: Props) => {
   const [ruleSetList, setRuleSetList] = useState<string[]>([])
   const [subRuleList, setSubRuleList] = useState<string[]>([])
 
-  const [prependSeq, setPrependSeq] = useState<string[]>([])
-  const [appendSeq, setAppendSeq] = useState<string[]>([])
+  const [prependSeq, setPrependSeq] = useState<ManualRuleItem[]>([])
+  const [appendSeq, setAppendSeq] = useState<ManualRuleItem[]>([])
   const [deleteSeq, setDeleteSeq] = useState<string[]>([])
 
   const filteredPrependSeq = useMemo(
-    () => prependSeq.filter((rule) => match(rule)),
+    () => prependSeq.filter((rule) => match(rule.raw)),
     [prependSeq, match],
   )
   const filteredRuleList = useMemo(
@@ -286,9 +294,41 @@ export const RulesEditorViewer = (props: Props) => {
     [ruleList, match],
   )
   const filteredAppendSeq = useMemo(
-    () => appendSeq.filter((rule) => match(rule)),
+    () => appendSeq.filter((rule) => match(rule.raw)),
     [appendSeq, match],
   )
+
+  const hasOriginalRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    return ruleList.some(
+      (rule) => getRawRuleIdentitySignature(rule) === signature,
+    )
+  }
+
+  const addDeleteSeqRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    setDeleteSeq((prev) =>
+      prev.some((item) => getRawRuleIdentitySignature(item) === signature)
+        ? prev
+        : [...prev, raw],
+    )
+  }
+
+  const removeDeleteSeqRule = (raw: string) => {
+    const signature = getRawRuleIdentitySignature(raw)
+    setDeleteSeq((prev) =>
+      prev.filter((item) => getRawRuleIdentitySignature(item) !== signature),
+    )
+  }
+
+  const syncDeleteSeqForManualRule = (raw: string, enabled: boolean) => {
+    if (!enabled || hasOriginalRule(raw)) {
+      addDeleteSeqRule(raw)
+      return
+    }
+
+    removeDeleteSeqRule(raw)
+  }
 
   const renderItem = (index: number): React.ReactNode => {
     const shift = filteredPrependSeq.length > 0 ? 1 : 0
@@ -301,17 +341,30 @@ export const RulesEditorViewer = (props: Props) => {
         >
           <SortableContext
             items={filteredPrependSeq.map((x) => {
-              return x
+              return x.raw
             })}
           >
             {filteredPrependSeq.map((item) => {
               return (
                 <RuleItem
-                  key={item}
+                  key={item.raw}
                   type="prepend"
-                  ruleRaw={item}
+                  ruleRaw={item.raw}
+                  enabled={item.enabled}
+                  onToggleEnabled={(enabled) => {
+                    setPrependSeq((prev) =>
+                      prev.map((rule) =>
+                        rule.raw === item.raw ? { ...rule, enabled } : rule,
+                      ),
+                    )
+                    syncDeleteSeqForManualRule(item.raw, enabled)
+                  }}
                   onDelete={() => {
-                    setPrependSeq(prependSeq.filter((v) => v !== item))
+                    const nextPrependSeq = prependSeq.filter(
+                      (v) => v.raw !== item.raw,
+                    )
+                    setPrependSeq(nextPrependSeq)
+                    removeDeleteSeqRule(item.raw)
                   }}
                 />
               )
@@ -321,22 +374,21 @@ export const RulesEditorViewer = (props: Props) => {
       )
     } else if (index < filteredRuleList.length + shift) {
       const newIndex = index - shift
+      const ruleRaw = filteredRuleList[newIndex]
+      const ruleSignature = getRawRuleIdentitySignature(ruleRaw)
+      const isDeleted = deleteSeq.some(
+        (raw) => getRawRuleIdentitySignature(raw) === ruleSignature,
+      )
       return (
         <RuleItem
-          key={filteredRuleList[newIndex]}
-          type={
-            deleteSeq.includes(filteredRuleList[newIndex])
-              ? 'delete'
-              : 'original'
-          }
-          ruleRaw={filteredRuleList[newIndex]}
+          key={ruleRaw}
+          type={isDeleted ? 'delete' : 'original'}
+          ruleRaw={ruleRaw}
           onDelete={() => {
-            if (deleteSeq.includes(filteredRuleList[newIndex])) {
-              setDeleteSeq(
-                deleteSeq.filter((v) => v !== filteredRuleList[newIndex]),
-              )
+            if (isDeleted) {
+              removeDeleteSeqRule(ruleRaw)
             } else {
-              setDeleteSeq((prev) => [...prev, filteredRuleList[newIndex]])
+              addDeleteSeqRule(ruleRaw)
             }
           }}
         />
@@ -350,17 +402,30 @@ export const RulesEditorViewer = (props: Props) => {
         >
           <SortableContext
             items={filteredAppendSeq.map((x) => {
-              return x
+              return x.raw
             })}
           >
             {filteredAppendSeq.map((item) => {
               return (
                 <RuleItem
-                  key={item}
+                  key={item.raw}
                   type="append"
-                  ruleRaw={item}
+                  ruleRaw={item.raw}
+                  enabled={item.enabled}
+                  onToggleEnabled={(enabled) => {
+                    setAppendSeq((prev) =>
+                      prev.map((rule) =>
+                        rule.raw === item.raw ? { ...rule, enabled } : rule,
+                      ),
+                    )
+                    syncDeleteSeqForManualRule(item.raw, enabled)
+                  }}
                   onDelete={() => {
-                    setAppendSeq(appendSeq.filter((v) => v !== item))
+                    const nextAppendSeq = appendSeq.filter(
+                      (v) => v.raw !== item.raw,
+                    )
+                    setAppendSeq(nextAppendSeq)
+                    removeDeleteSeqRule(item.raw)
                   }}
                 />
               )
@@ -379,7 +444,11 @@ export const RulesEditorViewer = (props: Props) => {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   )
-  const reorder = (list: string[], startIndex: number, endIndex: number) => {
+  const reorder = (
+    list: ManualRuleItem[],
+    startIndex: number,
+    endIndex: number,
+  ) => {
     const result = Array.from(list)
     const [removed] = result.splice(startIndex, 1)
     result.splice(endIndex, 0, removed)
@@ -389,8 +458,13 @@ export const RulesEditorViewer = (props: Props) => {
     const { active, over } = event
     if (over) {
       if (active.id !== over.id) {
-        const activeIndex = prependSeq.indexOf(active.id.toString())
-        const overIndex = prependSeq.indexOf(over.id.toString())
+        const activeIndex = prependSeq.findIndex(
+          (item) => item.raw === active.id.toString(),
+        )
+        const overIndex = prependSeq.findIndex(
+          (item) => item.raw === over.id.toString(),
+        )
+        if (activeIndex < 0 || overIndex < 0) return
         setPrependSeq(reorder(prependSeq, activeIndex, overIndex))
       }
     }
@@ -399,19 +473,24 @@ export const RulesEditorViewer = (props: Props) => {
     const { active, over } = event
     if (over) {
       if (active.id !== over.id) {
-        const activeIndex = appendSeq.indexOf(active.id.toString())
-        const overIndex = appendSeq.indexOf(over.id.toString())
+        const activeIndex = appendSeq.findIndex(
+          (item) => item.raw === active.id.toString(),
+        )
+        const overIndex = appendSeq.findIndex(
+          (item) => item.raw === over.id.toString(),
+        )
+        if (activeIndex < 0 || overIndex < 0) return
         setAppendSeq(reorder(appendSeq, activeIndex, overIndex))
       }
     }
   }
   const fetchContent = useCallback(async () => {
     const data = await readProfileFile(property)
-    const obj = yaml.load(data) as ISeqProfileConfig | null
+    const obj = normalizeManualRules(data)
 
-    setPrependSeq(obj?.prepend || [])
-    setAppendSeq(obj?.append || [])
-    setDeleteSeq(obj?.delete || [])
+    setPrependSeq(obj.prepend)
+    setAppendSeq(obj.append)
+    setDeleteSeq(obj.delete)
 
     setPrevData(data)
     setCurrData(data)
@@ -422,11 +501,11 @@ export const RulesEditorViewer = (props: Props) => {
       return
     }
 
-    const obj = yaml.load(currData) as ISeqProfileConfig | null
+    const obj = normalizeManualRules(currData)
     startTransition(() => {
-      setPrependSeq(obj?.prepend ?? [])
-      setAppendSeq(obj?.append ?? [])
-      setDeleteSeq(obj?.delete ?? [])
+      setPrependSeq(obj.prepend)
+      setAppendSeq(obj.append)
+      setDeleteSeq(obj.delete)
     })
   }, [currData, visualization])
 
@@ -439,9 +518,12 @@ export const RulesEditorViewer = (props: Props) => {
     const serialize = () => {
       try {
         setCurrData(
-          yaml.dump(
-            { prepend: prependSeq, append: appendSeq, delete: deleteSeq },
-            { forceQuotes: true },
+          dumpManualRules(
+            sanitizeManualRules({
+              prepend: prependSeq,
+              append: appendSeq,
+              delete: deleteSeq,
+            }),
           ),
         )
       } catch (error) {
@@ -569,13 +651,18 @@ export const RulesEditorViewer = (props: Props) => {
 
   const handleSave = useLockFn(async () => {
     try {
-      if (!(await saveProfileFile(property, currData))) {
+      const sanitizedData = dumpManualRules(
+        sanitizeManualRules(normalizeManualRules(currData)),
+      )
+
+      if (!(await saveProfileFile(property, sanitizedData))) {
         await fetchContent()
         onClose()
         return
       }
       showNotice.success('shared.feedback.notifications.saved')
-      onSave?.(prevData, currData)
+      setCurrData(sanitizedData)
+      onSave?.(prevData, sanitizedData)
       onClose()
     } catch (err: any) {
       showNotice.error(err)
@@ -734,8 +821,8 @@ export const RulesEditorViewer = (props: Props) => {
                   onClick={() => {
                     try {
                       const raw = validateRule()
-                      if (prependSeq.includes(raw)) return
-                      setPrependSeq([raw, ...prependSeq])
+                      if (prependSeq.some((item) => item.raw === raw)) return
+                      setPrependSeq([createManualRuleItem(raw), ...prependSeq])
                     } catch (err: any) {
                       showNotice.error(err)
                     }
@@ -752,8 +839,8 @@ export const RulesEditorViewer = (props: Props) => {
                   onClick={() => {
                     try {
                       const raw = validateRule()
-                      if (appendSeq.includes(raw)) return
-                      setAppendSeq([...appendSeq, raw])
+                      if (appendSeq.some((item) => item.raw === raw)) return
+                      setAppendSeq([...appendSeq, createManualRuleItem(raw)])
                     } catch (err: any) {
                       showNotice.error(err)
                     }

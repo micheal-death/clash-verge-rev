@@ -23,7 +23,9 @@
       "type": "类型",
       "value": "值",
       "policy": "策略",
-      "source": "来源"
+      "source": "来源",
+      "enableRule": "启用规则",
+      "disableRule": "禁用规则"
     },
     "sources": {
       "manual": "手动",

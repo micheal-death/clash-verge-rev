@@ -23,7 +23,9 @@
       "type": "Type",
       "value": "Value",
       "policy": "Policy",
-      "source": "Source"
+      "source": "Source",
+      "enableRule": "啟用規則",
+      "disableRule": "停用規則"
     },
     "sources": {
       "manual": "Manual",
