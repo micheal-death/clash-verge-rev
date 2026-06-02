@@ -809,6 +809,8 @@ export interface TranslationResources {
           runtime: string
         }
         table: {
+          disableRule: string
+          enableRule: string
           id: string
           policy: string
           source: string
