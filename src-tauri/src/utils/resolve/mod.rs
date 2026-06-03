@@ -134,6 +134,11 @@ async fn init_silent_updater() {
     use crate::core::SilentUpdater;
     use crate::core::handle::Handle;
 
+    if cfg!(any(debug_assertions, feature = "verge-dev", feature = "tauri-dev")) {
+        logging!(info, Type::Setup, "Silent updater skipped: development build");
+        return;
+    }
+
     logging!(info, Type::Setup, "Initializing silent updater...");
 
     let app_handle = Handle::app_handle();

@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Обновить все профили",
-      "viewRuntimeConfig": "Просмотреть текущую конфигурацию",
+      "viewEffectiveConfig": "Просмотреть итоговую конфигурацию",
       "reactivate": "Перезапустить профиль",
       "import": "Импортировать"
     },
@@ -61,20 +61,20 @@
       "select": "Выбрать",
       "shareQrCode": "Share QR Code",
       "editInfo": "Изменить информацию",
-      "editFile": "Изменить файл",
+      "editFile": "Изменить исходный файл",
       "editRules": "Редактировать правила",
       "editProxies": "Редактировать прокси",
       "editGroups": "Редактировать группы прокси",
-      "extendConfig": "Изменить Merge-конфигурацию",
-      "extendScript": "Изменить Script",
+      "extendConfig": "Изменить локальный оверлей конфигурации",
+      "extendScript": "Изменить локальный оверлей скрипта",
       "openFile": "Открыть файл",
       "update": "Обновить",
       "updateViaProxy": "Обновить через прокси"
     },
     "more": {
       "global": {
-        "merge": "Глобальная Merge-конфигурация",
-        "script": "Глобальный Script"
+        "merge": "Локальный оверлей конфигурации",
+        "script": "Локальный оверлей скрипта"
       },
       "chips": {
         "merge": "Merge",

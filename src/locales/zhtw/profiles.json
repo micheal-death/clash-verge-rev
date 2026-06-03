@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "更新所有訂閱",
-      "viewRuntimeConfig": "查看執行時訂閱",
+      "viewEffectiveConfig": "查看最終生效配置",
       "reactivate": "重新啟用訂閱",
       "import": "匯入"
     },
@@ -61,20 +61,20 @@
       "select": "使用",
       "shareQrCode": "Share QR Code",
       "editInfo": "編輯資訊",
-      "editFile": "編輯檔案",
+      "editFile": "編輯原始檔案",
       "editRules": "編輯規則",
       "editProxies": "編輯節點",
       "editGroups": "編輯代理組",
-      "extendConfig": "擴充覆寫設定",
-      "extendScript": "擴充指令碼",
+      "extendConfig": "編輯本地增強配置",
+      "extendScript": "編輯本地增強腳本",
       "openFile": "開啟檔案",
       "update": "更新",
       "updateViaProxy": "更新（代理）"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "全域增強配置層",
+        "script": "全域增強腳本層"
       },
       "chips": {
         "merge": "Merge",

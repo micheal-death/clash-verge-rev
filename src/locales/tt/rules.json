@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "Кагыйдәне бетерү",
+      "disable": "Кагыйдәне сүндерү",
+      "restore": "Кагыйдәне торгызу",
+      "showDisabledConfig": "Сүндерелгән конфигурация кагыйдәләрен күрсәтү"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "Конфигурация",
+      "disabledConfig": "Сүндерелгән конфигурация"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

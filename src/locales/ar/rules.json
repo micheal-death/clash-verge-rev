@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "حذف القاعدة",
+      "disable": "تعطيل القاعدة",
+      "restore": "استعادة القاعدة",
+      "showDisabledConfig": "إظهار قواعد التكوين المعطّلة"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "التكوين",
+      "disabledConfig": "تكوين معطّل"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

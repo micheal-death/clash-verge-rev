@@ -16,7 +16,10 @@
       "ruleset": "规则集合",
       "edit": "编辑规则",
       "duplicate": "复制规则",
-      "delete": "删除规则"
+      "delete": "删除规则",
+      "disable": "禁用规则",
+      "restore": "恢复规则",
+      "showDisabledConfig": "显示已禁用的配置规则"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "手动",
-      "runtime": "配置"
+      "runtime": "配置",
+      "disabledConfig": "已禁用配置"
     },
     "policyGroups": {
       "builtin": "内置策略",

@@ -28,24 +28,19 @@
 
 ## インストール
 
-[リリースページ](https://github.com/clash-verge-rev/clash-verge-rev/releases) から、ご利用のプラットフォームに対応したインストーラーをダウンロードしてください。<br>
-Windows (x64/x86)、Linux (x64/arm64)、macOS 10.15+ (Intel/Apple) をサポートしています。
+[Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) から、この fork の個人用ビルドをダウンロードしてください。<br>
+現在のカスタムビルドは Windows x64 と macOS Apple Silicon のインストーラーのみを公開しています。
 
 #### リリースチャンネルの選び方
 
-| チャンネル  | 説明                                                             | リンク                                                                                 |
-| :---------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | 安定版。信頼性が高く、日常利用に最適です。                       | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | 公開フローの検証に使用した旧テスト版。                           | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | 継続的に更新されるテスト版。フィードバックや新機能検証向けです。 | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| チャンネル       | 説明                                           | リンク                                                                                               |
+| :--------------- | :--------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | この fork の変更を含む個人用ローリングビルド。 | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
 #### インストール手順と FAQ
 
-詳しい導入手順やトラブルシュートは [ドキュメントサイト](https://clash-verge-rev.github.io/) を参照してください。
+詳しい導入手順やトラブルシュートは、このリポジトリの [README](https://github.com/micheal-death/clash-verge-rev#readme) を参照してください。
 
-### Telegram チャンネル
-
-更新情報は [@clash_verge_rev](https://t.me/clash_verge_re) をフォローしてください。
 
 ---
 
@@ -61,11 +56,8 @@ Windows (x64/x86)、Linux (x64/arm64)、macOS 10.15+ (Intel/Apple) をサポー�
 
 ### FAQ
 
-プラットフォーム別の案内は [FAQ ページ](https://clash-verge-rev.github.io/faq/windows.html) を参照してください。
+追加の案内は、このリポジトリの [README](https://github.com/micheal-death/clash-verge-rev#readme) を参照してください。
 
-### 寄付
-
-[Clash Verge Rev の開発を支援する](https://github.com/sponsors/clash-verge-rev)
 
 ## 開発
 

@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "حذف قانون",
+      "disable": "غیرفعال کردن قانون",
+      "restore": "بازیابی قانون",
+      "showDisabledConfig": "نمایش قوانین پیکربندی غیرفعال"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "پیکربندی",
+      "disabledConfig": "پیکربندی غیرفعال"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

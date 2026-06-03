@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "Удалить правило",
+      "disable": "Отключить правило",
+      "restore": "Восстановить правило",
+      "showDisabledConfig": "Показывать отключенные правила конфигурации"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "Конфигурация",
+      "disabledConfig": "Отключенная конфигурация"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

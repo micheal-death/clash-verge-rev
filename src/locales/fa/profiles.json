@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "به‌روزرسانی همه پروفایل‌ها",
-      "viewRuntimeConfig": "مشاهده پیکربندی زمان اجرا",
+      "viewEffectiveConfig": "مشاهده پیکربندی نهایی",
       "reactivate": "فعال‌سازی مجدد پروفایل‌ها",
       "import": "وارد کردن"
     },
@@ -61,20 +61,20 @@
       "select": "انتخاب",
       "shareQrCode": "Share QR Code",
       "editInfo": "ویرایش اطلاعات",
-      "editFile": "ویرایش فایل",
+      "editFile": "ویرایش فایل اصلی",
       "editRules": "ویرایش قوانین",
       "editProxies": "ویرایش پروکسی‌ها",
       "editGroups": "ویرایش گروه‌های پروکسی",
-      "extendConfig": "توسعه پیکربندی",
-      "extendScript": "ادغام اسکریپت",
+      "extendConfig": "ویرایش پیکربندی پوششی محلی",
+      "extendScript": "ویرایش اسکریپت پوششی محلی",
       "openFile": "باز کردن فایل",
       "update": "به‌روزرسانی",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "پیکربندی پوششی محلی",
+        "script": "اسکریپت پوششی محلی"
       },
       "chips": {
         "merge": "Merge",

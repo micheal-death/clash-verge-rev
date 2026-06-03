@@ -2,7 +2,6 @@
   "page": {
     "actions": {
       "manual": "Manual de uso",
-      "telegram": "Canal de Telegram",
       "github": "Dirección del proyecto en GitHub"
     },
     "title": "Ajustes"
@@ -360,7 +359,7 @@
         "scheduleHelper": "Create local backups in the background at the configured interval.",
         "intervalLabel": "Backup frequency",
         "changeLabel": "Backup on critical changes",
-        "changeHelper": "Automatically backup when Global Extend Config/Script changes.",
+        "changeHelper": "Realiza una copia de seguridad automática cuando cambie la configuración o el script del overlay gestionado.",
         "options": {
           "hours": "Every {{n}} hours",
           "days": "Every {{n}} days"

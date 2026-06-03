@@ -28,21 +28,20 @@ A Clash Meta GUI based on <a href="https://github.com/tauri-apps/tauri">Tauri</a
 
 ## Install
 
-请到发布页面下载对应的安装包：[Release page](https://github.com/clash-verge-rev/clash-verge-rev/releases)<br>
-Go to the [Release page](https://github.com/clash-verge-rev/clash-verge-rev/releases) to download the corresponding installation package<br>
-Supports Windows (x64/x86), Linux (x64/arm64) and macOS 11+ (intel/apple).
+请到本 fork 的发布页面下载自用构建：[Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild)<br>
+Go to the [Custom AutoBuild release](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) to download this fork's personal build.<br>
+Current custom builds only publish Windows x64 and macOS Apple Silicon installers.
 
-#### 我应当怎样选择发行版
+### 我应当怎样选择发行版
 
-| 版本        | 特征                                     | 链接                                                                                   |
-| :---------- | :--------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | 正式版，高可靠性，适合日常使用。         | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha(废弃) | 测试发布流程。                           | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | 滚动更新版，适合测试反馈，可能存在缺陷。 | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| 版本             | 特征                           | 链接                                                                                                 |
+| :--------------- | :----------------------------- | :--------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | 自用滚动构建，包含个人分支改动。 | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
-#### 安装说明和常见问题，请到 [文档页](https://clash-verge-rev.github.io/) 查看
+### 安装说明和常见问题
 
-### TG 频道: [@clash_verge_rev](https://t.me/clash_verge_re)
+请查看本仓库 README。
+
 
 ---
 
@@ -55,14 +54,6 @@ Supports Windows (x64/x86), Linux (x64/arm64) and macOS 11+ (intel/apple).
 - 系统代理和守卫、`TUN(虚拟网卡)` 模式。
 - 可视化节点和规则编辑
 - WebDav 配置备份和同步
-
-### FAQ
-
-Refer to [Doc FAQ Page](https://clash-verge-rev.github.io/faq/windows.html)
-
-### Donation
-
-[捐助Clash Verge Rev的开发](https://github.com/sponsors/clash-verge-rev)
 
 ## Development
 

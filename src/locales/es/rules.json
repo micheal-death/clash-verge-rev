@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "Eliminar regla",
+      "disable": "Desactivar regla",
+      "restore": "Restaurar regla",
+      "showDisabledConfig": "Mostrar reglas de configuración deshabilitadas"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "Configuración",
+      "disabledConfig": "Configuración deshabilitada"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

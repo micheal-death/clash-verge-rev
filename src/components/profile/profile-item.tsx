@@ -975,6 +975,7 @@ export const ProfileItem = (props: Props) => {
       {mergeOpen && (
         <EditorViewer
           open={true}
+          title={t('profiles.components.menu.extendConfig')}
           value={mergeDocument.value}
           language="yaml"
           path={`merge:${option?.merge ?? ''}.yaml`}
@@ -988,6 +989,7 @@ export const ProfileItem = (props: Props) => {
       {scriptOpen && (
         <EditorViewer
           open={true}
+          title={t('profiles.components.menu.extendScript')}
           value={scriptDocument.value}
           language="javascript"
           path={`script:${option?.script ?? ''}.js`}

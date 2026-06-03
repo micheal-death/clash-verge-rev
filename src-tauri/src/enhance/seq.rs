@@ -55,7 +55,7 @@ fn rule_identity(raw: &str) -> Option<String> {
         String::new()
     } else {
         let value = parts.join(",");
-        if rule_type == "GEOIP" || rule_type == "SRC-GEOIP" {
+        if rule_type == "GEOIP" || rule_type == "SRC-GEOIP" || rule_type == "NETWORK" {
             value.to_ascii_uppercase()
         } else {
             value.trim().to_owned()
@@ -416,6 +416,35 @@ rules:
             prepend: Sequence::new(),
             append: Sequence::new(),
             delete: vec!["GEOIP,CN,DIRECT".to_string()],
+        };
+
+        config = use_seq(seq, config, "rules");
+
+        let rules = config
+            .get("rules")
+            .expect("rules field should exist")
+            .as_sequence()
+            .expect("rules should be a sequence");
+
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].as_str(), Some("MATCH,GLOBAL"));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
+    fn test_delete_rule_matches_normalized_network_value() {
+        let config_str = r"
+rules:
+- NETWORK,udp,DIRECT
+- MATCH,GLOBAL
+";
+        let mut config: Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test config YAML");
+
+        let seq = SeqMap {
+            prepend: Sequence::new(),
+            append: Sequence::new(),
+            delete: vec!["NETWORK,UDP,DIRECT".to_string()],
         };
 
         config = use_seq(seq, config, "rules");

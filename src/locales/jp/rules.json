@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "ルールを削除",
+      "disable": "ルールを無効化",
+      "restore": "ルールを復元",
+      "showDisabledConfig": "無効化された設定ルールを表示"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "設定",
+      "disabledConfig": "無効化された設定"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

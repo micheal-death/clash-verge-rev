@@ -766,7 +766,7 @@ const ProfilePage = () => {
               <IconButton
                 size="small"
                 color="inherit"
-                title={t('profiles.page.actions.viewRuntimeConfig')}
+                title={t('profiles.page.actions.viewEffectiveConfig')}
                 onClick={() => configRef.current?.open()}
               >
                 <TextSnippetOutlined />
@@ -1016,7 +1016,11 @@ const ProfilePage = () => {
           }
         }}
       />
-      <ConfigViewer ref={configRef} />
+      <ConfigViewer
+        ref={configRef}
+        title={t('profiles.page.actions.viewEffectiveConfig')}
+        path="effective-config.yaml"
+      />
     </BasePage>
   )
 }

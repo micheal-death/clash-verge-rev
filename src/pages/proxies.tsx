@@ -100,12 +100,33 @@ type DeleteDependencyDetails = {
   ruleRefs: string[]
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value)
+
+const hasPolicyItemName = (value: unknown): value is { name: string } =>
+  isPlainObject(value) &&
+  typeof value.name === 'string' &&
+  value.name.trim().length > 0
+
+const normalizePolicyDeleteNames = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+
 const normalizeManualProxyDocument = (data: string): ManualProxyDocument => {
   const obj = yaml.load(data) as Partial<ManualProxyDocument> | null
   return {
-    prepend: Array.isArray(obj?.prepend) ? obj.prepend : [],
-    append: Array.isArray(obj?.append) ? obj.append : [],
-    delete: Array.isArray(obj?.delete) ? obj.delete : [],
+    prepend: Array.isArray(obj?.prepend)
+      ? obj.prepend.filter((item): item is IProxyConfig =>
+          hasPolicyItemName(item),
+        )
+      : [],
+    append: Array.isArray(obj?.append)
+      ? obj.append.filter((item): item is IProxyConfig =>
+          hasPolicyItemName(item),
+        )
+      : [],
+    delete: normalizePolicyDeleteNames(obj?.delete),
   }
 }
 
@@ -144,9 +165,17 @@ const dumpManualProxyDocument = (document: ManualProxyDocument) =>
 const normalizeManualGroupDocument = (data: string): ManualGroupDocument => {
   const obj = yaml.load(data) as Partial<ManualGroupDocument> | null
   return {
-    prepend: Array.isArray(obj?.prepend) ? obj.prepend : [],
-    append: Array.isArray(obj?.append) ? obj.append : [],
-    delete: Array.isArray(obj?.delete) ? obj.delete : [],
+    prepend: Array.isArray(obj?.prepend)
+      ? obj.prepend.filter((item): item is IProxyGroupConfig =>
+          hasPolicyItemName(item),
+        )
+      : [],
+    append: Array.isArray(obj?.append)
+      ? obj.append.filter((item): item is IProxyGroupConfig =>
+          hasPolicyItemName(item),
+        )
+      : [],
+    delete: normalizePolicyDeleteNames(obj?.delete),
   }
 }
 

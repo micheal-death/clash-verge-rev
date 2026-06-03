@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Alle Abonnements aktualisieren",
-      "viewRuntimeConfig": "Laufzeit-Abonnement anzeigen",
+      "viewEffectiveConfig": "Effektive Konfiguration anzeigen",
       "reactivate": "Abonnement erneut aktivieren",
       "import": "Importieren"
     },
@@ -61,20 +61,20 @@
       "select": "Verwenden",
       "shareQrCode": "Share QR Code",
       "editInfo": "Informationen bearbeiten",
-      "editFile": "Datei bearbeiten",
+      "editFile": "Originaldatei bearbeiten",
       "editRules": "Regeln bearbeiten",
       "editProxies": "Knoten bearbeiten",
       "editGroups": "Proxy-Gruppen bearbeiten",
-      "extendConfig": "Erweiterte Überdeckungskonfiguration",
-      "extendScript": "Erweitertes Skript",
+      "extendConfig": "Verwaltete Overlay-Konfiguration bearbeiten",
+      "extendScript": "Verwaltetes Overlay-Skript bearbeiten",
       "openFile": "Datei öffnen",
       "update": "Aktualisieren",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Verwaltete Overlay-Konfiguration",
+        "script": "Verwaltetes Overlay-Skript"
       },
       "chips": {
         "merge": "Merge",

@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "Hapus Aturan",
+      "disable": "Nonaktifkan Aturan",
+      "restore": "Pulihkan Aturan",
+      "showDisabledConfig": "Tampilkan aturan konfigurasi yang dinonaktifkan"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "Konfigurasi",
+      "disabledConfig": "Konfigurasi Dinonaktifkan"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

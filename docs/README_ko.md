@@ -28,24 +28,19 @@
 
 ## 설치
 
-[릴리스 페이지](https://github.com/clash-verge-rev/clash-verge-rev/releases)에서 사용 중인 플랫폼에 맞는 설치 프로그램을 다운로드하세요.<br>
-Windows (x64/x86), Linux (x64/arm64), macOS 10.15+ (Intel/Apple)을 지원합니다.
+[Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild)에서 이 fork의 개인용 빌드를 다운로드하세요.<br>
+현재 커스텀 빌드는 Windows x64와 macOS Apple Silicon 설치 프로그램만 게시합니다.
 
 #### 릴리스 채널 선택
 
-| 채널        | 설명                                                                                 | 링크                                                                                   |
-| :---------- | :----------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | 안정 릴리스. 신뢰성이 높아 일상 사용에 적합합니다.                                   | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | 퍼블리시 파이프라인 검증에 사용되었던 구 테스트 채널입니다.                          | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | 롤링 빌드 채널. 테스트와 피드백 용도로 권장되며, 실험적인 변경이 포함될 수 있습니다. | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| 채널             | 설명                                      | 링크                                                                                               |
+| :--------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | 이 fork의 변경 사항을 포함한 개인용 롤링 빌드입니다. | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
 #### 설치 가이드 및 FAQ
 
-설치 방법, 트러블슈팅, 자주 묻는 질문은 [프로젝트 문서](https://clash-verge-rev.github.io/)를 참고하세요.
+설치 방법, 트러블슈팅, 자주 묻는 질문은 이 저장소의 [README](https://github.com/micheal-death/clash-verge-rev#readme)를 참고하세요.
 
-### 텔레그램 채널
-
-업데이트 공지는 [@clash_verge_rev](https://t.me/clash_verge_re)에서 확인하세요.
 
 ---
 
@@ -61,11 +56,8 @@ Windows (x64/x86), Linux (x64/arm64), macOS 10.15+ (Intel/Apple)을 지원합니
 
 ### FAQ
 
-플랫폼별 가이드는 [FAQ 페이지](https://clash-verge-rev.github.io/faq/windows.html)에서 확인하세요.
+추가 안내는 이 저장소의 [README](https://github.com/micheal-death/clash-verge-rev#readme)를 참고하세요.
 
-### 후원
-
-[Clash Verge Rev 개발 후원](https://github.com/sponsors/clash-verge-rev)
 
 ## 개발
 

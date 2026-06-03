@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 #
 # extract_update_logs.sh
-# 从 Changelog.md 提取最新版本 (## v...) 的更新内容
+# 从指定 changelog 文件提取第一段二级标题 (## ...) 的更新内容
 # 并输出到屏幕或写入环境变量文件（如 GitHub Actions）
 
 set -euo pipefail
 
-CHANGELOG_FILE="Changelog.md"
+CHANGELOG_FILE="${1:-${CHANGELOG_FILE:-Changelog.md}}"
 
 if [[ ! -f "$CHANGELOG_FILE" ]]; then
   echo "❌ 文件不存在: $CHANGELOG_FILE" >&2
   exit 1
 fi
 
-# 提取从第一个 '## v' 开始到下一个 '## v' 前的内容
+# 提取从第一个 '## ' 开始到下一个 '## ' 前的内容
 UPDATE_LOGS=$(awk '
-  /^## v/ {
+  /^##[[:space:]]+/ {
     if (found) exit;
     found=1
   }
