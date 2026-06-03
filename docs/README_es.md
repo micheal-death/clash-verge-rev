@@ -28,24 +28,19 @@ Una interfaz gráfica para Clash Meta construida con <a href="https://github.com
 
 ## Instalación
 
-Visita la [página de lanzamientos](https://github.com/clash-verge-rev/clash-verge-rev/releases) y descarga el instalador que corresponda a tu plataforma.<br>
-Ofrecemos paquetes para Windows (x64/x86), Linux (x64/arm64) y macOS 10.15+ (Intel/Apple).
+Visita [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) para descargar la compilación personal de este fork.<br>
+Actualmente solo se publican instaladores para Windows x64 y macOS Apple Silicon.
 
 #### Cómo elegir el canal de lanzamiento
 
-| Canal       | Descripción                                                                    | Enlace                                                                                 |
-| :---------- | :----------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | Compilaciones oficiales de alta fiabilidad; ideales para el uso diario.        | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | Compilaciones heredadas usadas para validar el flujo de publicación.           | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | Compilaciones continuas para pruebas y retroalimentación. Espera cambios beta. | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Canal            | Descripción                                      | Enlace                                                                                               |
+| :--------------- | :----------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | Compilación continua personal con cambios del fork. | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
 #### Guías de instalación y preguntas frecuentes
 
-Consulta la [documentación del proyecto](https://clash-verge-rev.github.io/) para encontrar los pasos de instalación, solución de problemas y preguntas frecuentes.
+Consulta el [README](https://github.com/micheal-death/clash-verge-rev#readme) de este repositorio para instalación, solución de problemas y preguntas frecuentes.
 
-### Canal de Telegram
-
-Únete a [@clash_verge_rev](https://t.me/clash_verge_re) para enterarte de las novedades.
 
 ---
 
@@ -61,11 +56,8 @@ Consulta la [documentación del proyecto](https://clash-verge-rev.github.io/) pa
 
 ### Preguntas frecuentes
 
-Visita la [página de FAQ](https://clash-verge-rev.github.io/faq/windows.html) para obtener instrucciones específicas por plataforma.
+Consulta el [README](https://github.com/micheal-death/clash-verge-rev#readme) de este repositorio para obtener instrucciones específicas.
 
-### Donaciones
-
-[Apoya el desarrollo de Clash Verge Rev](https://github.com/sponsors/clash-verge-rev)
 
 ## Desarrollo
 

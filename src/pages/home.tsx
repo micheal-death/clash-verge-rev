@@ -35,6 +35,7 @@ import { ProxyTunCard } from '@/components/home/proxy-tun-card'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
 import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
+import { CUSTOM_README_URL } from '@/utils/external-links'
 
 const LazyTestCard = lazy(() =>
   import('@/components/home/test-card').then((module) => ({
@@ -263,7 +264,7 @@ const HomePage = () => {
 
   // 文档链接函数
   const toGithubDoc = useLockFn(() => {
-    return openWebUrl('https://clash-verge-rev.github.io/index.html')
+    return openWebUrl(CUSTOM_README_URL)
   })
 
   // 新增：打开设置弹窗

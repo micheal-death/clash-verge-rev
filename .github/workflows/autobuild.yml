@@ -38,7 +38,7 @@ jobs:
 
       - name: Fetch UPDATE logs
         id: fetch_update_logs
-        run: bash ./scripts/extract_update_logs.sh
+        run: bash ./scripts/extract_update_logs.sh CustomChangelog.md
         shell: bash
 
       - uses: pnpm/action-setup@v6.0.8
@@ -84,8 +84,8 @@ jobs:
           ### macOS
           - [Apple M芯片](${{ env.DOWNLOAD_URL }}/Clash.Verge_${{ env.VERSION }}_aarch64.dmg)
 
-          ### FAQ
-          - [常见问题](https://clash-verge-rev.github.io/faq/windows.html)
+          ### 项目说明
+          - [README](https://github.com/${GITHUB_REPOSITORY}#readme)
 
           Created at ${{ env.BUILDTIME }}.
           EOF
@@ -196,7 +196,7 @@ jobs:
           prerelease: true
           tauriScript: pnpm
           args: --target ${{ matrix.target }}
-          # includeUpdaterJson: true
+          includeUpdaterJson: true
 
   notify-telegram:
     name: Notify Telegram
@@ -210,7 +210,7 @@ jobs:
 
       - name: Fetch UPDATE logs
         id: fetch_update_logs
-        run: bash ./scripts/extract_update_logs.sh
+        run: bash ./scripts/extract_update_logs.sh CustomChangelog.md
         shell: bash
 
       - name: Install Node
@@ -257,8 +257,8 @@ jobs:
           ### macOS
           - [Apple M芯片](${{ env.DOWNLOAD_URL }}/Clash.Verge_${{ env.VERSION }}_aarch64.dmg)
 
-          ### FAQ
-          - [常见问题](https://clash-verge-rev.github.io/faq/windows.html)
+          ### 项目说明
+          - [README](https://github.com/${GITHUB_REPOSITORY}#readme)
 
           Created at ${{ env.BUILDTIME }}.
           EOF

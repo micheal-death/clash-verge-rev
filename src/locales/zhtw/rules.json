@@ -16,7 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule"
+      "delete": "Delete Rule",
+      "disable": "停用規則",
+      "restore": "恢復規則",
+      "showDisabledConfig": "顯示已停用的配置規則"
     },
     "table": {
       "id": "ID",
@@ -29,7 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config"
+      "runtime": "Config",
+      "disabledConfig": "已停用配置"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

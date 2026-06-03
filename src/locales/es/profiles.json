@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Actualizar todas las suscripciones",
-      "viewRuntimeConfig": "Ver configuración en tiempo de ejecución",
+      "viewEffectiveConfig": "Ver configuración efectiva",
       "reactivate": "Reactivar suscripciones",
       "import": "Importar"
     },
@@ -61,20 +61,20 @@
       "select": "Usar",
       "shareQrCode": "Share QR Code",
       "editInfo": "Editar información",
-      "editFile": "Editar archivo",
+      "editFile": "Editar archivo original",
       "editRules": "Editar reglas",
       "editProxies": "Editar nodos",
       "editGroups": "Editar grupos de proxy",
-      "extendConfig": "Configurar sobrescritura extendida",
-      "extendScript": "Script extendido",
+      "extendConfig": "Editar configuración superpuesta local",
+      "extendScript": "Editar script superpuesto local",
       "openFile": "Abrir archivo",
       "update": "Actualizar",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Configuración superpuesta local",
+        "script": "Script superpuesto local"
       },
       "chips": {
         "merge": "Merge",

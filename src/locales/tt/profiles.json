@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Барлык профильләрне яңарту",
-      "viewRuntimeConfig": "Кулланылган конфигурацияне карау",
+      "viewEffectiveConfig": "View Effective Config",
       "reactivate": "Профильләрне янәдән активлаштыру",
       "import": "Импорт"
     },
@@ -61,20 +61,20 @@
       "select": "Сайлау",
       "shareQrCode": "Share QR Code",
       "editInfo": "Мәгълүматны үзгәртү",
-      "editFile": "Файлны үзгәртү",
+      "editFile": "Edit Original File",
       "editRules": "Кагыйдәләрне үзгәртү",
       "editProxies": "Проксины үзгәртү",
       "editGroups": "Прокси төркемнәрен үзгәртү",
-      "extendConfig": "Merge-ны үзгәртергә",
-      "extendScript": "Script-ны үзгәртергә",
+      "extendConfig": "Edit Local Overlay Config",
+      "extendScript": "Edit Local Overlay Script",
       "openFile": "Файлны ачу",
       "update": "Яңарту",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Local Overlay Config",
+        "script": "Local Overlay Script"
       },
       "chips": {
         "merge": "Merge",

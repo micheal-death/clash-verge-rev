@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Update All Profiles",
-      "viewRuntimeConfig": "View Runtime Config",
+      "viewEffectiveConfig": "View Effective Config",
       "reactivate": "Reactivate Profiles",
       "import": "Import"
     },
@@ -61,20 +61,20 @@
       "select": "Select",
       "shareQrCode": "Share QR Code",
       "editInfo": "Edit Info",
-      "editFile": "Edit File",
+      "editFile": "Edit Original File",
       "editRules": "Edit Rules",
       "editProxies": "Edit Proxies",
       "editGroups": "Edit Proxy Groups",
-      "extendConfig": "Extend Config",
-      "extendScript": "Extend Script",
+      "extendConfig": "Edit Managed Overlay Config",
+      "extendScript": "Edit Managed Overlay Script",
       "openFile": "Open File",
       "update": "Update",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Managed Overlay Config",
+        "script": "Managed Overlay Script"
       },
       "chips": {
         "merge": "Merge",

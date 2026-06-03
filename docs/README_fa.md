@@ -28,23 +28,19 @@
 
 ## نصب
 
-برای دانلود فایل نصبی متناسب با پلتفرم خود، به [صفحه انتشار](https://github.com/clash-verge-rev/clash-verge-rev/releases) مراجعه کنید.<br> ما بسته‌هایی برای ویندوز (x64/x86)، لینوکس (x64/arm64) و macOS 10.15+ (اینتل/اپل) ارائه می‌دهیم.
+برای دانلود نسخه شخصی این fork، به [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) مراجعه کنید.<br>
+در حال حاضر فقط نصب‌کننده‌های Windows x64 و macOS Apple Silicon منتشر می‌شوند.
 
 #### انتخاب کانال انتشار
 
-| Channel     | توضیحات                                                                                           | Link                                                                                   |
-| :---------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------- |
-| Stable      | ساخت رسمی با قابلیت اطمینان بالا، ایده‌آل برای استفاده روزانه.                                    | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | نسخه‌های قدیمی (Legacy builds) برای اعتبارسنجی خط لوله انتشار (publish pipeline) استفاده می‌شوند. | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | نسخه‌های آزمایشی برای آزمایش و دریافت بازخورد. منتظر تغییرات آزمایشی باشید.                       | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Channel          | توضیحات                                      | Link                                                                                                |
+| :--------------- | :------------------------------------------ | :-------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | نسخه شخصی و پیوسته با تغییرات مخصوص این fork. | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
 #### راهنماهای نصب و سوالات متداول
 
-برای مراحل نصب، عیب‌یابی و سوالات متداول، [مستندات پروژه](https://clash-verge-rev.github.io/) را مطالعه کنید.
+برای مراحل نصب، عیب‌یابی و سوالات متداول، [README](https://github.com/micheal-death/clash-verge-rev#readme) همین مخزن را مطالعه کنید.
 
-### کانال تلگرام
-
-برای اطلاع از آخرین اخبار به [@clash_verge_rev](https://t.me/clash_verge_re) بپیوندید.
 
 ---
 
@@ -60,11 +56,8 @@
 
 ### سوالات متداول
 
-برای راهنمایی‌های مربوط به هر پلتفرم، به [صفحه سوالات متداول](https://clash-verge-rev.github.io/faq/windows.html) مراجعه کنید.
+برای راهنمایی‌های بیشتر، [README](https://github.com/micheal-death/clash-verge-rev#readme) همین مخزن را مطالعه کنید.
 
-### اهدا
-
-[پشتیبانی از توسعه Clash Verge Rev](https://github.com/sponsors/clash-verge-rev)
 
 ## توسعه
 

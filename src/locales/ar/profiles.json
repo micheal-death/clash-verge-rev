@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "تحديث جميع الملفات الشخصية",
-      "viewRuntimeConfig": "عرض تكوين وقت التشغيل",
+      "viewEffectiveConfig": "عرض التكوين الفعّال",
       "reactivate": "إعادة تنشيط الملفات الشخصية",
       "import": "استيراد"
     },
@@ -61,20 +61,20 @@
       "select": "اختيار",
       "shareQrCode": "Share QR Code",
       "editInfo": "تعديل المعلومات",
-      "editFile": "تعديل الملف",
+      "editFile": "تعديل الملف الأصلي",
       "editRules": "تعديل القواعد",
       "editProxies": "تعديل الوكلاء",
       "editGroups": "تعديل مجموعات الوكلاء",
-      "extendConfig": "توسيع الإعدادات",
-      "extendScript": "توسيع السكربت",
+      "extendConfig": "تعديل تكوين الطبقة المحلية",
+      "extendScript": "تعديل سكربت الطبقة المحلية",
       "openFile": "فتح الملف",
       "update": "تحديث",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "تكوين الطبقة المحلية",
+        "script": "سكربت الطبقة المحلية"
       },
       "chips": {
         "merge": "Merge",

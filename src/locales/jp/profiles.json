@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "すべてのプロファイルを更新",
-      "viewRuntimeConfig": "実行時のプロファイルを表示",
+      "viewEffectiveConfig": "有効な設定を表示",
       "reactivate": "プロファイルを再アクティブ化",
       "import": "インポート"
     },
@@ -61,20 +61,20 @@
       "select": "使用する",
       "shareQrCode": "Share QR Code",
       "editInfo": "情報を編集",
-      "editFile": "ファイルを編集",
+      "editFile": "元のファイルを編集",
       "editRules": "ルールを編集",
       "editProxies": "ノードを編集",
       "editGroups": "プロキシグループを編集",
-      "extendConfig": "拡張上書き設定",
-      "extendScript": "拡張スクリプト",
+      "extendConfig": "ローカルオーバーレイ設定を編集",
+      "extendScript": "ローカルオーバーレイスクリプトを編集",
       "openFile": "ファイルを開く",
       "update": "更新",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "ローカルオーバーレイ設定",
+        "script": "ローカルオーバーレイスクリプト"
       },
       "chips": {
         "merge": "Merge",

@@ -2,7 +2,6 @@
   "page": {
     "actions": {
       "manual": "Документация",
-      "telegram": "Telegram-канал",
       "github": "GitHub репозиторий"
     },
     "title": "Настройки"
@@ -360,7 +359,7 @@
         "scheduleHelper": "Создавать локальные резервные копии в фоновом режиме через заданный интервал.",
         "intervalLabel": "Частота резервного копирования",
         "changeLabel": "Резервное копирование при критических изменениях",
-        "changeHelper": "Автоматически создавать резервную копию при изменении Global Extend Config/Script.",
+        "changeHelper": "Автоматически создавать резервную копию при изменении Managed Overlay Config/Script.",
         "options": {
           "hours": "Каждые {{n}} часов",
           "days": "Каждые {{n}} дней"

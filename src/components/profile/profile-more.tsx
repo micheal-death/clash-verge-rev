@@ -72,7 +72,13 @@ export const ProfileMore = (props: Props) => {
   }
 
   const itemMenu = [
-    { label: 'profiles.components.menu.editFile', handler: onEditFile },
+    {
+      label:
+        id === 'Merge'
+          ? 'profiles.components.menu.extendConfig'
+          : 'profiles.components.menu.extendScript',
+      handler: onEditFile,
+    },
     { label: 'profiles.components.menu.openFile', handler: onOpenFile },
   ]
 

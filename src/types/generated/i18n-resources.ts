@@ -550,7 +550,7 @@ export interface TranslationResources {
           import: string
           reactivate: string
           updateAll: string
-          viewRuntimeConfig: string
+          viewEffectiveConfig: string
         }
         batch: {
           actions: {
@@ -780,10 +780,13 @@ export interface TranslationResources {
         actions: {
           add: string
           delete: string
+          disable: string
           duplicate: string
           edit: string
           logical: string
+          restore: string
           ruleset: string
+          showDisabledConfig: string
           standard: string
         }
         dialogs: {
@@ -805,6 +808,7 @@ export interface TranslationResources {
           trigger: string
         }
         sources: {
+          disabledConfig: string
           manual: string
           runtime: string
         }
@@ -1322,7 +1326,6 @@ export interface TranslationResources {
         actions: {
           github: string
           manual: string
-          telegram: string
         }
         title: string
       }

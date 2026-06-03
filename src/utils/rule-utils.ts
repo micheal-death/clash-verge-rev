@@ -1,5 +1,13 @@
 import yaml from 'js-yaml'
 
+import type {
+  EffectiveManualRuleSection,
+  EffectivePolicyOption,
+  EffectivePolicySource,
+  EffectivePolicyType,
+  EffectiveRuleRow,
+} from '@/types/effective-profile'
+
 export type RuleSource = 'prepend' | 'runtime' | 'append'
 export type ManualRuleSource = Exclude<RuleSource, 'runtime'>
 export type RuleDialogKind = 'standard' | 'logical' | 'ruleset'
@@ -13,6 +21,24 @@ export interface ManualRulesDocument {
   prepend: ManualRuleItem[]
   append: ManualRuleItem[]
   delete: string[]
+}
+
+export interface ManualProxyDocument {
+  prepend: IProxyConfig[]
+  append: IProxyConfig[]
+  delete: string[]
+}
+
+export interface ManualGroupDocument {
+  prepend: IProxyGroupConfig[]
+  append: IProxyGroupConfig[]
+  delete: string[]
+}
+
+export interface RuntimeRuleInput {
+  type: string
+  payload?: string | null
+  proxy: string
 }
 
 export interface ParsedRule {
@@ -209,6 +235,21 @@ const toStringArray = (value: unknown) =>
     ? value.filter((item): item is string => typeof item === 'string')
     : []
 
+const getPolicyItemName = (item: unknown) => {
+  if (typeof item === 'string') return item.trim()
+  if (!item || typeof item !== 'object') return ''
+
+  const name = (item as { name?: unknown }).name
+  return typeof name === 'string' ? name.trim() : ''
+}
+
+export const normalizePolicyDeleteNames = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? Array.from(
+        new Set(value.map(getPolicyItemName).filter((name) => name.length > 0)),
+      )
+    : []
+
 const getManualRuleRawFromUnknown = (item: unknown) => {
   if (typeof item === 'string') return item
   if (!item || typeof item !== 'object') return ''
@@ -224,6 +265,22 @@ const getManualRuleRawFromUnknown = (item: unknown) => {
   if (typeof ruleItem.value === 'string') return ruleItem.value
 
   return ''
+}
+
+export const getProfileRuleRaws = (data: string | undefined): string[] => {
+  if (!data) return []
+
+  try {
+    const obj = yaml.load(data) as Record<string, unknown> | null
+    const value = obj?.rules
+    return Array.isArray(value)
+      ? value
+          .map(getManualRuleRawFromUnknown)
+          .filter((raw) => raw.trim().length > 0)
+      : []
+  } catch {
+    return []
+  }
 }
 
 const getManualRuleEnabledFromUnknown = (item: unknown) => {
@@ -252,6 +309,42 @@ export const normalizeManualRules = (data: string): ManualRulesDocument => {
     prepend: toManualRuleItems(obj?.prepend),
     append: toManualRuleItems(obj?.append),
     delete: toStringArray(obj?.delete),
+  }
+}
+
+const toProxyItems = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter(
+        (item): item is IProxyConfig => getPolicyItemName(item).length > 0,
+      )
+    : []
+
+const toGroupItems = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter(
+        (item): item is IProxyGroupConfig => getPolicyItemName(item).length > 0,
+      )
+    : []
+
+export const normalizeManualProxyDocument = (
+  data: string,
+): ManualProxyDocument => {
+  const obj = yaml.load(data) as Partial<ManualProxyDocument> | null
+  return {
+    prepend: toProxyItems(obj?.prepend),
+    append: toProxyItems(obj?.append),
+    delete: normalizePolicyDeleteNames(obj?.delete),
+  }
+}
+
+export const normalizeManualGroupDocument = (
+  data: string,
+): ManualGroupDocument => {
+  const obj = yaml.load(data) as Partial<ManualGroupDocument> | null
+  return {
+    prepend: toGroupItems(obj?.prepend),
+    append: toGroupItems(obj?.append),
+    delete: normalizePolicyDeleteNames(obj?.delete),
   }
 }
 
@@ -284,6 +377,11 @@ export const parseRuleRaw = (raw: string): ParsedRule => {
     noResolve,
   }
 }
+
+export const isMatchRule = (rule: Pick<ParsedRule, 'type'>) =>
+  rule.type.trim().toUpperCase() === 'MATCH'
+
+export const isMatchRuleRaw = (raw: string) => isMatchRule(parseRuleRaw(raw))
 
 export const normalizeRuleValue = (type: string, value: string): string => {
   const normalizedType = type.trim().toUpperCase()
@@ -450,6 +548,357 @@ export const sanitizeManualRules = (
 export const makeSearchText = (row: ParsedRule, source: string, raw: string) =>
   [row.type, row.value, row.policy, source, raw].join(' ')
 
+export interface BuildEffectivePolicyOptionsOptions {
+  builtinPolicies?: string[]
+  baseProfileData?: string
+  manualProxies?: ManualProxyDocument
+  manualGroups?: ManualGroupDocument
+  runtimeProxyNames?: string[]
+  runtimeGroupNames?: string[]
+}
+
+const getProfileSequenceNames = (data: string | undefined, field: string) => {
+  if (!data) return []
+
+  try {
+    const obj = yaml.load(data) as Record<string, unknown> | null
+    const value = obj?.[field]
+    return Array.isArray(value)
+      ? value.map(getPolicyItemName).filter((name) => name.length > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+const addEffectivePolicyOption = (
+  options: EffectivePolicyOption[],
+  seen: Set<string>,
+  name: string,
+  source: EffectivePolicySource,
+  type: EffectivePolicyType,
+) => {
+  const normalizedName = name.trim()
+  if (!normalizedName || seen.has(normalizedName)) return
+
+  seen.add(normalizedName)
+  options.push({
+    name: normalizedName,
+    source,
+    type,
+    available: true,
+  })
+}
+
+export const buildEffectivePolicyOptions = ({
+  builtinPolicies = [],
+  baseProfileData,
+  manualProxies = { prepend: [], append: [], delete: [] },
+  manualGroups = { prepend: [], append: [], delete: [] },
+  runtimeProxyNames = [],
+  runtimeGroupNames = [],
+}: BuildEffectivePolicyOptionsOptions): EffectivePolicyOption[] => {
+  const options: EffectivePolicyOption[] = []
+  const seen = new Set<string>()
+  const deletedProxyNames = new Set(manualProxies.delete)
+  const deletedGroupNames = new Set(manualGroups.delete)
+
+  builtinPolicies.forEach((name) =>
+    addEffectivePolicyOption(options, seen, name, 'builtin', 'builtin'),
+  )
+
+  getProfileSequenceNames(baseProfileData, 'proxies')
+    .filter((name) => !deletedProxyNames.has(name))
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'base', 'proxy'),
+    )
+
+  getProfileSequenceNames(baseProfileData, 'proxy-groups')
+    .filter((name) => !deletedGroupNames.has(name))
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'base', 'group'),
+    )
+
+  ;[...manualProxies.prepend, ...manualProxies.append]
+    .map(getPolicyItemName)
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'manual', 'proxy'),
+    )
+
+  ;[...manualGroups.prepend, ...manualGroups.append]
+    .map(getPolicyItemName)
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'manual', 'group'),
+    )
+
+  runtimeProxyNames
+    .filter((name) => !deletedProxyNames.has(name))
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'runtime', 'proxy'),
+    )
+
+  runtimeGroupNames
+    .filter((name) => !deletedGroupNames.has(name))
+    .forEach((name) =>
+      addEffectivePolicyOption(options, seen, name, 'runtime', 'group'),
+    )
+
+  return options
+}
+
+interface ManualRuleRowInput {
+  item: ManualRuleItem
+  manualSection: EffectiveManualRuleSection
+  manualIndex: number
+}
+
+export type ManualEffectiveRuleRow = EffectiveRuleRow & {
+  source: 'manual'
+  manualSection: EffectiveManualRuleSection
+  manualIndex: number
+}
+
+const createEffectiveRuleRow = (
+  parsed: ParsedRule,
+  row: Omit<
+    EffectiveRuleRow,
+    keyof ParsedRule | 'effectiveIndex' | 'searchText'
+  >,
+  searchSource: string,
+): EffectiveRuleRow => ({
+  ...parsed,
+  ...row,
+  effectiveIndex: -1,
+  searchText: makeSearchText(parsed, searchSource, row.raw),
+})
+
+const createManualEffectiveRuleRow = ({
+  item,
+  manualSection,
+  manualIndex,
+}: ManualRuleRowInput): ManualEffectiveRuleRow => {
+  const parsed = parseRuleRaw(item.raw)
+
+  return {
+    ...createEffectiveRuleRow(
+      parsed,
+      {
+        id: `${manualSection}:${manualIndex}:${item.raw}`,
+        raw: item.raw,
+        enabled: item.enabled,
+        source: 'manual',
+        manualSection,
+        manualIndex,
+        locked: false,
+        editable: true,
+        deletable: true,
+        canToggle: true,
+        canChangePolicy: true,
+        writeTarget:
+          manualSection === 'prepend' ? 'rules-prepend' : 'rules-append',
+      },
+      'manual',
+    ),
+    source: 'manual',
+    manualSection,
+    manualIndex,
+  }
+}
+
+const createOverlayDeleteRuleRow = (
+  raw: string,
+  index: number,
+): EffectiveRuleRow => {
+  const parsed = parseRuleRaw(raw)
+
+  return createEffectiveRuleRow(
+    parsed,
+    {
+      id: `delete:${index}:${raw}`,
+      raw,
+      enabled: false,
+      source: 'overlay-delete',
+      locked: false,
+      editable: true,
+      deletable: false,
+      canToggle: true,
+      canChangePolicy: true,
+      writeTarget: 'rules-delete',
+    },
+    'runtime',
+  )
+}
+
+const createBaseRuleRow = (raw: string, index: number): EffectiveRuleRow => {
+  const parsed = parseRuleRaw(raw)
+
+  return createEffectiveRuleRow(
+    parsed,
+    {
+      id: `base:${index}:${raw}`,
+      raw,
+      enabled: true,
+      source: 'base',
+      baseRaw: raw,
+      baseIndex: index,
+      locked: false,
+      editable: true,
+      deletable: true,
+      canToggle: true,
+      canChangePolicy: true,
+      writeTarget: 'rules-delete',
+    },
+    'runtime',
+  )
+}
+
+const createRuntimeRuleRow = (
+  rule: RuntimeRuleInput,
+  index: number,
+): EffectiveRuleRow => {
+  const raw = runtimeRuleToRaw(rule)
+  const parsed = parseRuleRaw(raw)
+
+  return createEffectiveRuleRow(
+    parsed,
+    {
+      id: `runtime:${index}:${raw}`,
+      raw,
+      enabled: true,
+      source: 'runtime',
+      locked: false,
+      editable: true,
+      deletable: true,
+      canToggle: true,
+      canChangePolicy: true,
+      writeTarget: 'rules-delete',
+    },
+    'runtime',
+  )
+}
+
+export const isEffectiveManualRuleRow = (
+  row: EffectiveRuleRow,
+): row is ManualEffectiveRuleRow => row.source === 'manual'
+
+export const isEffectiveRuntimeRuleRow = (row: EffectiveRuleRow) =>
+  row.source === 'runtime'
+
+export const isEffectiveOverlayDeleteRuleRow = (row: EffectiveRuleRow) =>
+  row.source === 'overlay-delete'
+
+export const isEffectiveConfigRuleRow = (row: EffectiveRuleRow) =>
+  row.source === 'base' ||
+  row.source === 'runtime' ||
+  isEffectiveOverlayDeleteRuleRow(row)
+
+export const isEffectiveFallbackRuleRow = (row: EffectiveRuleRow) =>
+  row.writeTarget === 'rules-fallback'
+
+export const shouldShowEffectiveRuleRow = (
+  row: EffectiveRuleRow,
+  options: { showDisabledConfigRules?: boolean } = {},
+) =>
+  options.showDisabledConfigRules === true ||
+  !isEffectiveOverlayDeleteRuleRow(row)
+
+export interface BuildEffectiveRuleRowsOptions {
+  manualRules: ManualRulesDocument
+  baseRules?: string[]
+  runtimeRules: RuntimeRuleInput[]
+  pendingRuntimeSuppressedSignatures?: ReadonlySet<string>
+}
+
+const markFinalFallbackRule = (
+  rows: EffectiveRuleRow[],
+): EffectiveRuleRow[] => {
+  let fallbackIndex = -1
+
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index].enabled && isMatchRule(rows[index])) {
+      fallbackIndex = index
+      break
+    }
+  }
+
+  return rows.map((row, effectiveIndex) => {
+    const indexedRow = {
+      ...row,
+      effectiveIndex,
+    }
+
+    if (effectiveIndex !== fallbackIndex) return indexedRow
+
+    return {
+      ...indexedRow,
+      locked: true,
+      deletable: false,
+      canToggle: false,
+      canChangePolicy: true,
+      writeTarget: 'rules-fallback',
+    }
+  })
+}
+
+export const buildEffectiveRuleRows = ({
+  manualRules,
+  baseRules = [],
+  runtimeRules,
+  pendingRuntimeSuppressedSignatures = new Set(),
+}: BuildEffectiveRuleRowsOptions): EffectiveRuleRow[] => {
+  const manualRows = [
+    ...manualRules.prepend.map((item, manualIndex) =>
+      createManualEffectiveRuleRow({
+        item,
+        manualSection: 'prepend',
+        manualIndex,
+      }),
+    ),
+    ...manualRules.append.map((item, manualIndex) =>
+      createManualEffectiveRuleRow({
+        item,
+        manualSection: 'append',
+        manualIndex,
+      }),
+    ),
+  ]
+  const manualSignatures = new Set(
+    manualRows.map((row) => getRawRuleIdentitySignature(row.raw)),
+  )
+  const deletedSignatures = new Set(
+    manualRules.delete.map(getRawRuleIdentitySignature),
+  )
+  const deletedRows = manualRules.delete
+    .filter((raw) => !manualSignatures.has(getRawRuleIdentitySignature(raw)))
+    .map(createOverlayDeleteRuleRow)
+  const baseRows = baseRules.map(createBaseRuleRow).filter((row) => {
+    const signature = getRuleIdentitySignature(row)
+    return !manualSignatures.has(signature) && !deletedSignatures.has(signature)
+  })
+  const baseSignatures = new Set(
+    baseRows.map((row) => getRuleIdentitySignature(row)),
+  )
+  const runtimeRows = runtimeRules.map(createRuntimeRuleRow).filter((row) => {
+    const signature = getRuleIdentitySignature(row)
+    return (
+      !manualSignatures.has(signature) &&
+      !baseSignatures.has(signature) &&
+      !deletedSignatures.has(signature) &&
+      !pendingRuntimeSuppressedSignatures.has(signature)
+    )
+  })
+
+  const effectiveRows = [
+    ...manualRows.filter((row) => row.manualSection === 'prepend'),
+    ...deletedRows,
+    ...baseRows,
+    ...runtimeRows,
+    ...manualRows.filter((row) => row.manualSection === 'append'),
+  ]
+
+  return markFinalFallbackRule(effectiveRows)
+}
+
 export const removeAt = (
   list: ManualRuleItem[],
   index?: number,
@@ -533,6 +982,15 @@ export const addRuleDelete = (document: ManualRulesDocument, raw: string) => {
   )
 
   if (!exists) document.delete.push(raw)
+}
+
+export const addRuleOverlayReplacement = (
+  document: ManualRulesDocument,
+  originalRaw: string,
+  replacementRaw: string,
+) => {
+  addRuleDelete(document, originalRaw)
+  document.prepend.unshift(createManualRuleItem(replacementRaw))
 }
 
 export const revealRuntimeRuleIfUnshadowed = (

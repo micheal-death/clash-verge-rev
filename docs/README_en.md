@@ -28,24 +28,19 @@ A Clash Meta GUI built with <a href="https://github.com/tauri-apps/tauri">Tauri<
 
 ## Install
 
-Visit the [Release page](https://github.com/clash-verge-rev/clash-verge-rev/releases) to download the installer that matches your platform.<br>
-We provide packages for Windows (x64/x86), Linux (x64/arm64), and macOS 10.15+ (Intel/Apple).
+Visit the [Custom AutoBuild release](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) to download this fork's personal build.<br>
+Current custom builds only publish Windows x64 and macOS Apple Silicon installers.
 
 #### Choosing a Release Channel
 
-| Channel     | Description                                                           | Link                                                                                   |
-| :---------- | :-------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | Official builds with high reliability, ideal for daily use.           | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | Legacy builds used to validate the publish pipeline.                  | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | Rolling builds for testing and feedback. Expect experimental changes. | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Channel          | Description                                  | Link                                                                                                 |
+| :--------------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | Personal rolling build with fork-only changes. | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
 #### Installation Guides & FAQ
 
-Read the [project documentation](https://clash-verge-rev.github.io/) for install steps, troubleshooting, and frequently asked questions.
+Read this repository's [README](https://github.com/micheal-death/clash-verge-rev#readme) for install steps, troubleshooting, and frequently asked questions.
 
-### Telegram Channel
-
-Join [@clash_verge_rev](https://t.me/clash_verge_re) for update announcements.
 
 ---
 
@@ -61,11 +56,8 @@ Join [@clash_verge_rev](https://t.me/clash_verge_re) for update announcements.
 
 ### FAQ
 
-See the [FAQ page](https://clash-verge-rev.github.io/faq/windows.html) for platform-specific guidance.
+See this repository's [README](https://github.com/micheal-death/clash-verge-rev#readme) for platform-specific guidance.
 
-### Donation
-
-[Support Clash Verge Rev development](https://github.com/sponsors/clash-verge-rev)
 
 ## Development
 

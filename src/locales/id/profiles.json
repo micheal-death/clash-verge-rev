@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Perbarui Semua Profil",
-      "viewRuntimeConfig": "Lihat Konfigurasi Runtime",
+      "viewEffectiveConfig": "Lihat Konfigurasi Efektif",
       "reactivate": "Reaktivasi Profil",
       "import": "Impor"
     },
@@ -61,20 +61,20 @@
       "select": "Pilih",
       "shareQrCode": "Share QR Code",
       "editInfo": "Ubah Info",
-      "editFile": "Ubah Berkas",
+      "editFile": "Ubah Berkas Asli",
       "editRules": "Ubah Aturan",
       "editProxies": "Ubah Proksi",
       "editGroups": "Ubah Grup Proksi",
-      "extendConfig": "Perluas Konfigurasi",
-      "extendScript": "Perluas Skrip",
+      "extendConfig": "Ubah Konfigurasi Overlay Lokal",
+      "extendScript": "Ubah Skrip Overlay Lokal",
       "openFile": "Buka Berkas",
       "update": "Perbarui",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Konfigurasi Overlay Lokal",
+        "script": "Skrip Overlay Lokal"
       },
       "chips": {
         "merge": "Merge",

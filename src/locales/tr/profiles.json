@@ -2,7 +2,7 @@
   "page": {
     "actions": {
       "updateAll": "Tüm Profilleri Güncelle",
-      "viewRuntimeConfig": "Çalışma Zamanı Yapılandırmasını Görüntüle",
+      "viewEffectiveConfig": "Etkin Yapılandırmayı Görüntüle",
       "reactivate": "Profilleri Yeniden Etkinleştir",
       "import": "İçe Aktar"
     },
@@ -61,20 +61,20 @@
       "select": "Seç",
       "shareQrCode": "Share QR Code",
       "editInfo": "Bilgileri Düzenle",
-      "editFile": "Dosyayı Düzenle",
+      "editFile": "Özgün Dosyayı Düzenle",
       "editRules": "Kuralları Düzenle",
       "editProxies": "Vekil'leri Düzenle",
       "editGroups": "Vekil Gruplarını Düzenle",
-      "extendConfig": "Yapılandırma Genişletme",
-      "extendScript": "Betik Genişletme",
+      "extendConfig": "Yerel Overlay Yapılandırmasını Düzenle",
+      "extendScript": "Yerel Overlay Betiğini Düzenle",
       "openFile": "Dosyayı Aç",
       "update": "Güncelle",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Global Extend Config",
-        "script": "Global Extend Script"
+        "merge": "Yerel Overlay Yapılandırması",
+        "script": "Yerel Overlay Betiği"
       },
       "chips": {
         "merge": "Merge",

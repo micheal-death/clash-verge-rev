@@ -27,21 +27,17 @@ Clash Meta GUI базируется на <a href="https://github.com/tauri-apps/
 
 ## Установка
 
-Пожалуйста, перейдите на страницу релизов, чтобы скачать соответствующий установочный пакет: [Страница релизов](https://github.com/clash-verge-rev/clash-verge-rev/releases)<br>
-Перейти на [Страницу релизов](https://github.com/clash-verge-rev/clash-verge-rev/releases) to download the corresponding installation package<br>
-Поддержка Windows (x64/x86), Linux (x64/arm64) и macOS 10.15+ (intel/apple).
+Перейдите на [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild), чтобы скачать личную сборку этого fork.<br>
+Сейчас пользовательские сборки публикуют только установщики для Windows x64 и macOS Apple Silicon.
 
 #### Как выбрать дистрибутив?
 
-| Версия                | Характеристики                                                                                          | Ссылка                                                                                 |
-| :-------------------- | :------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------- |
-| Stable                | Официальный релиз, высокая надежность, подходит для повседневного использования.                        | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha(неиспользуемый) | Тестирование процесса публикации.                                                                       | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild             | Версия с постоянным обновлением, подходящая для тестирования и обратной связи. Может содержать дефекты. | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Версия           | Характеристики                                      | Ссылка                                                                                              |
+| :--------------- | :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| Custom AutoBuild | Личная rolling-сборка с изменениями этого fork.     | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
-#### Инструкции по установке и ответы на часто задаваемые вопросы можно найти на [странице документации](https://clash-verge-rev.github.io/)
+#### Инструкции по установке и ответы на часто задаваемые вопросы находятся в [README](https://github.com/micheal-death/clash-verge-rev#readme) этого репозитория.
 
-### TG канал: [@clash_verge_rev](https://t.me/clash_verge_re)
 
 ---
 
@@ -57,11 +53,8 @@ Clash Meta GUI базируется на <a href="https://github.com/tauri-apps/
 
 ### FAQ
 
-Смотрите [Страница часто задаваемых вопросов](https://clash-verge-rev.github.io/faq/windows.html)
+Смотрите [README](https://github.com/micheal-death/clash-verge-rev#readme) этого репозитория.
 
-### Донат
-
-[Поддержите развитие Clash Verge Rev](https://github.com/sponsors/clash-verge-rev)
 
 ## Разработка
 

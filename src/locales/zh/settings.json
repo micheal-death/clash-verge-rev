@@ -2,7 +2,6 @@
   "page": {
     "actions": {
       "manual": "使用手册",
-      "telegram": "Telegram 频道",
       "github": "GitHub 项目地址"
     },
     "title": "设置"
@@ -360,7 +359,7 @@
         "scheduleHelper": "按设定频率在后台创建本地备份文件。",
         "intervalLabel": "备份频率",
         "changeLabel": "关键变更时自动备份",
-        "changeHelper": "全局扩展覆写配置/脚本更改后自动备份。",
+        "changeHelper": "本地增强配置/脚本更改后自动备份。",
         "options": {
           "hours": "每 {{n}} 小时",
           "days": "每 {{n}} 天"

@@ -2,16 +2,26 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  addRuleOverlayReplacement,
+  buildEffectivePolicyOptions,
+  buildEffectiveRuleRows,
   buildLogicalRuleValue,
   buildRuleRaw,
   dumpManualRules,
+  getProfileRuleRaws,
   getRawRuleIdentitySignature,
   getRulePresetDialogState,
+  isEffectiveFallbackRuleRow,
+  isEffectiveManualRuleRow,
+  isEffectiveOverlayDeleteRuleRow,
+  normalizeManualGroupDocument,
+  normalizeManualProxyDocument,
   normalizeManualRules,
   normalizeLogicalRuleValue,
   parseLogicalRuleItems,
   runtimeRuleToRaw,
   sanitizeManualRules,
+  shouldShowEffectiveRuleRow,
 } from '../src/utils/rule-utils.ts'
 
 test('builds canonical logical rule values from structured sub-rules', () => {
@@ -202,5 +212,365 @@ test('builds rule rows from editor forms and runtime rules consistently', () => 
       proxy: 'DIRECT',
     }),
     'PROCESS-PATH,/Applications/Foo.app/Contents/MacOS/foo,DIRECT',
+  )
+})
+
+test('builds source-aware effective rule rows without changing row ordering', () => {
+  const rows = buildEffectiveRuleRows({
+    manualRules: {
+      prepend: [{ raw: 'DOMAIN,manual.test,DIRECT', enabled: true }],
+      append: [{ raw: 'MATCH,GLOBAL', enabled: true }],
+      delete: ['DOMAIN,deleted.test,DIRECT'],
+    },
+    runtimeRules: [
+      { type: 'Domain', payload: 'deleted.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'runtime.test', proxy: 'DIRECT' },
+      { type: 'Match', proxy: 'GLOBAL' },
+    ],
+  })
+
+  assert.deepEqual(
+    rows.map((row) => [row.source, row.raw, row.enabled, row.effectiveIndex]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT', true, 0],
+      ['overlay-delete', 'DOMAIN,deleted.test,DIRECT', false, 1],
+      ['runtime', 'DOMAIN,runtime.test,DIRECT', true, 2],
+      ['manual', 'MATCH,GLOBAL', true, 3],
+    ],
+  )
+
+  assert.equal(isEffectiveManualRuleRow(rows[0]), true)
+  assert.equal(isEffectiveManualRuleRow(rows[1]), false)
+  assert.equal(rows[0].manualSection, 'prepend')
+  assert.equal(rows[3].manualSection, 'append')
+  assert.equal(rows[1].writeTarget, 'rules-delete')
+  assert.equal(isEffectiveFallbackRuleRow(rows[3]), true)
+  assert.equal(rows[3].locked, true)
+  assert.equal(rows[3].deletable, false)
+  assert.equal(rows[3].canToggle, false)
+})
+
+test('extracts base profile rules for effective rows', () => {
+  assert.deepEqual(
+    getProfileRuleRaws(`
+rules:
+  - DOMAIN,base.example,DIRECT
+  - rule: DOMAIN,object-rule.example,proxy-default
+    enabled: false
+  - raw: MATCH,GLOBAL
+  - value: DOMAIN,value-rule.example,DIRECT
+  - invalid: true
+`),
+    [
+      'DOMAIN,base.example,DIRECT',
+      'DOMAIN,object-rule.example,proxy-default',
+      'MATCH,GLOBAL',
+      'DOMAIN,value-rule.example,DIRECT',
+    ],
+  )
+
+  assert.deepEqual(getProfileRuleRaws('rules: [unterminated'), [])
+  assert.deepEqual(getProfileRuleRaws(undefined), [])
+})
+
+test('hides pending runtime rows while keeping disabled overlay rows visible', () => {
+  const suppressedSignature = getRawRuleIdentitySignature(
+    'DOMAIN,suppressed.test,DIRECT',
+  )
+  const rows = buildEffectiveRuleRows({
+    manualRules: {
+      prepend: [{ raw: 'DOMAIN,manual.test,DIRECT', enabled: false }],
+      append: [],
+      delete: ['DOMAIN,manual.test,DIRECT', 'DOMAIN,deleted.test,DIRECT'],
+    },
+    runtimeRules: [
+      { type: 'Domain', payload: 'manual.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'deleted.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'suppressed.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'visible.test', proxy: 'DIRECT' },
+    ],
+    pendingRuntimeSuppressedSignatures: new Set([suppressedSignature]),
+  })
+
+  assert.deepEqual(
+    rows.map((row) => [row.source, row.raw, row.enabled]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT', false],
+      ['overlay-delete', 'DOMAIN,deleted.test,DIRECT', false],
+      ['runtime', 'DOMAIN,visible.test,DIRECT', true],
+    ],
+  )
+})
+
+test('filters disabled config rows from the default visible rule list', () => {
+  const rows = buildEffectiveRuleRows({
+    manualRules: {
+      prepend: [{ raw: 'DOMAIN,manual.test,DIRECT', enabled: true }],
+      append: [{ raw: 'MATCH,proxy-default', enabled: true }],
+      delete: ['MATCH,GLOBAL'],
+    },
+    runtimeRules: [{ type: 'Match', proxy: 'GLOBAL' }],
+  })
+
+  assert.deepEqual(
+    rows.map((row) => [row.source, row.raw, row.enabled]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT', true],
+      ['overlay-delete', 'MATCH,GLOBAL', false],
+      ['manual', 'MATCH,proxy-default', true],
+    ],
+  )
+  assert.equal(isEffectiveOverlayDeleteRuleRow(rows[1]), true)
+
+  assert.deepEqual(
+    rows
+      .filter((row) => shouldShowEffectiveRuleRow(row))
+      .map((row) => [row.source, row.raw]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT'],
+      ['manual', 'MATCH,proxy-default'],
+    ],
+  )
+  assert.deepEqual(
+    rows
+      .filter((row) =>
+        shouldShowEffectiveRuleRow(row, { showDisabledConfigRules: true }),
+      )
+      .map((row) => [row.source, row.raw]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT'],
+      ['overlay-delete', 'MATCH,GLOBAL'],
+      ['manual', 'MATCH,proxy-default'],
+    ],
+  )
+})
+
+test('config rule replacement writes delete marker and local replacement', () => {
+  const manualRules = {
+    prepend: [],
+    append: [],
+    delete: [],
+  }
+
+  addRuleOverlayReplacement(
+    manualRules,
+    'DOMAIN,base.test,DIRECT',
+    'DOMAIN,base.test,proxy-default',
+  )
+
+  assert.deepEqual(manualRules, {
+    prepend: [
+      {
+        raw: 'DOMAIN,base.test,proxy-default',
+        enabled: true,
+      },
+    ],
+    append: [],
+    delete: ['DOMAIN,base.test,DIRECT'],
+  })
+
+  const rows = buildEffectiveRuleRows({
+    manualRules: sanitizeManualRules(manualRules),
+    baseRules: ['DOMAIN,base.test,DIRECT'],
+    runtimeRules: [{ type: 'Domain', payload: 'base.test', proxy: 'DIRECT' }],
+  })
+
+  assert.deepEqual(
+    rows
+      .filter((row) => shouldShowEffectiveRuleRow(row))
+      .map((row) => [row.source, row.raw]),
+    [['manual', 'DOMAIN,base.test,proxy-default']],
+  )
+  assert.deepEqual(
+    rows
+      .filter((row) =>
+        shouldShowEffectiveRuleRow(row, { showDisabledConfigRules: true }),
+      )
+      .map((row) => [row.source, row.raw]),
+    [
+      ['manual', 'DOMAIN,base.test,proxy-default'],
+      ['overlay-delete', 'DOMAIN,base.test,DIRECT'],
+    ],
+  )
+})
+
+test('uses base rules as source-aware rows before runtime fallback rows', () => {
+  const rows = buildEffectiveRuleRows({
+    manualRules: {
+      prepend: [],
+      append: [{ raw: 'MATCH,GLOBAL', enabled: true }],
+      delete: ['DOMAIN,deleted-base.test,DIRECT'],
+    },
+    baseRules: [
+      'DOMAIN,base.test,DIRECT',
+      'DOMAIN,deleted-base.test,DIRECT',
+      'DOMAIN,manual-shadowed.test,DIRECT',
+    ],
+    runtimeRules: [
+      { type: 'Domain', payload: 'base.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'runtime-only.test', proxy: 'DIRECT' },
+      { type: 'Domain', payload: 'manual-shadowed.test', proxy: 'DIRECT' },
+      { type: 'Match', proxy: 'GLOBAL' },
+    ],
+  })
+
+  assert.deepEqual(
+    rows.map((row) => [row.source, row.raw, row.baseIndex, row.effectiveIndex]),
+    [
+      ['overlay-delete', 'DOMAIN,deleted-base.test,DIRECT', undefined, 0],
+      ['base', 'DOMAIN,base.test,DIRECT', 0, 1],
+      ['base', 'DOMAIN,manual-shadowed.test,DIRECT', 2, 2],
+      ['runtime', 'DOMAIN,runtime-only.test,DIRECT', undefined, 3],
+      ['manual', 'MATCH,GLOBAL', undefined, 4],
+    ],
+  )
+})
+
+test('marks only the final active MATCH rule as the fallback row', () => {
+  const rows = buildEffectiveRuleRows({
+    manualRules: {
+      prepend: [{ raw: 'DOMAIN,manual.test,DIRECT', enabled: true }],
+      append: [{ raw: 'MATCH,proxy-default', enabled: true }],
+      delete: ['MATCH,GLOBAL'],
+    },
+    runtimeRules: [
+      { type: 'Match', proxy: 'GLOBAL' },
+      { type: 'Domain', payload: 'runtime.test', proxy: 'DIRECT' },
+    ],
+  })
+
+  assert.deepEqual(
+    rows.map((row) => [row.source, row.raw, row.enabled]),
+    [
+      ['manual', 'DOMAIN,manual.test,DIRECT', true],
+      ['overlay-delete', 'MATCH,GLOBAL', false],
+      ['runtime', 'DOMAIN,runtime.test,DIRECT', true],
+      ['manual', 'MATCH,proxy-default', true],
+    ],
+  )
+
+  const fallbackRows = rows.filter(isEffectiveFallbackRuleRow)
+  assert.equal(fallbackRows.length, 1)
+  assert.equal(fallbackRows[0].raw, 'MATCH,proxy-default')
+  assert.equal(fallbackRows[0].writeTarget, 'rules-fallback')
+  assert.equal(fallbackRows[0].canChangePolicy, true)
+})
+
+test('does not lock non-fallback config rules', () => {
+  const rows = buildEffectiveRuleRows({
+    manualRules: emptyManualRulesForTest(),
+    runtimeRules: [
+      { type: 'Domain', payload: 'runtime.test', proxy: 'DIRECT' },
+      { type: 'Match', proxy: 'GLOBAL' },
+    ],
+  })
+
+  assert.equal(rows[0].raw, 'DOMAIN,runtime.test,DIRECT')
+  assert.equal(rows[0].locked, false)
+  assert.equal(rows[0].deletable, true)
+  assert.equal(rows[0].canToggle, true)
+  assert.equal(rows[0].writeTarget, 'rules-delete')
+
+  assert.equal(rows[1].raw, 'MATCH,GLOBAL')
+  assert.equal(isEffectiveFallbackRuleRow(rows[1]), true)
+})
+
+const emptyManualRulesForTest = () => ({
+  prepend: [],
+  append: [],
+  delete: [],
+})
+
+test('builds effective policy options from base, overlay, and runtime sources', () => {
+  const manualProxies = normalizeManualProxyDocument(`
+prepend:
+  - name: manual-proxy
+    type: ss
+append: []
+delete:
+  - base-proxy
+`)
+  const manualGroups = normalizeManualGroupDocument(`
+prepend:
+  - name: proxy-default
+    type: select
+    proxies:
+      - manual-proxy
+append: []
+delete:
+  - base-deleted-group
+`)
+  const options = buildEffectivePolicyOptions({
+    builtinPolicies: ['DIRECT', 'REJECT'],
+    baseProfileData: `
+proxies:
+  - name: base-proxy
+    type: ss
+  - name: base-kept-proxy
+    type: ss
+proxy-groups:
+  - name: base-deleted-group
+    type: select
+  - name: base-kept-group
+    type: select
+`,
+    manualProxies,
+    manualGroups,
+    runtimeProxyNames: ['base-proxy', 'runtime-proxy'],
+    runtimeGroupNames: ['base-deleted-group', 'GLOBAL', 'runtime-group'],
+  })
+
+  assert.deepEqual(
+    options.map((option) => [option.name, option.source, option.type]),
+    [
+      ['DIRECT', 'builtin', 'builtin'],
+      ['REJECT', 'builtin', 'builtin'],
+      ['base-kept-proxy', 'base', 'proxy'],
+      ['base-kept-group', 'base', 'group'],
+      ['manual-proxy', 'manual', 'proxy'],
+      ['proxy-default', 'manual', 'group'],
+      ['runtime-proxy', 'runtime', 'proxy'],
+      ['GLOBAL', 'runtime', 'group'],
+      ['runtime-group', 'runtime', 'group'],
+    ],
+  )
+})
+
+test('deduplicates policy options while preferring earlier effective sources', () => {
+  const options = buildEffectivePolicyOptions({
+    builtinPolicies: ['DIRECT'],
+    baseProfileData: `
+proxies:
+  - name: duplicated
+    type: ss
+proxy-groups:
+  - name: duplicated-group
+    type: select
+`,
+    manualProxies: normalizeManualProxyDocument(`
+prepend:
+  - name: duplicated
+    type: ss
+append: []
+delete: []
+`),
+    manualGroups: normalizeManualGroupDocument(`
+prepend:
+  - name: duplicated-group
+    type: select
+append: []
+delete: []
+`),
+    runtimeProxyNames: ['duplicated'],
+    runtimeGroupNames: ['duplicated-group'],
+  })
+
+  assert.deepEqual(
+    options.map((option) => [option.name, option.source, option.type]),
+    [
+      ['DIRECT', 'builtin', 'builtin'],
+      ['duplicated', 'base', 'proxy'],
+      ['duplicated-group', 'base', 'group'],
+    ],
   )
 })

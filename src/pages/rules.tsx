@@ -17,11 +17,13 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   AddRounded,
+  BlockRounded,
   ContentCopyRounded,
   DeleteRounded,
   DragIndicatorRounded,
   EditRounded,
   PlaylistAddRounded,
+  RestoreRounded,
 } from '@mui/icons-material'
 import {
   Autocomplete,
@@ -39,6 +41,7 @@ import {
   ListItemIcon,
   Menu,
   MenuItem,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -77,8 +80,12 @@ import {
   saveProfileFile,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import type { EffectiveRuleRow } from '@/types/effective-profile'
 import {
   addRuleDelete,
+  addRuleOverlayReplacement,
+  buildEffectiveRuleRows,
+  buildEffectivePolicyOptions,
   buildLogicalRuleValue,
   buildRuleRaw,
   cloneManualRules,
@@ -88,53 +95,58 @@ import {
   emptyManualRules,
   getDefaultRuleForm,
   getKindFromType,
+  getProfileRuleRaws,
   getRawRuleIdentitySignature,
   getRuleIdentitySignature,
   getRulePresetDialogState,
   getTypeOptions,
   insertAt,
+  isEffectiveFallbackRuleRow,
+  isEffectiveConfigRuleRow,
+  isEffectiveManualRuleRow,
+  isEffectiveOverlayDeleteRuleRow,
+  isEffectiveRuntimeRuleRow,
   isGeoipRule,
+  isMatchRuleRaw,
   isLogicalRuleItemComplete,
-  isManualRuleSource,
   logicalRuleTypes,
   logicalSubruleTypes,
-  makeSearchText,
   networkRuleValues,
   noResolveRuleTypes,
+  normalizeManualGroupDocument,
+  normalizeManualProxyDocument,
   normalizeManualRules,
   parseLogicalRuleItems,
-  parseRuleRaw,
   removeAt,
   replaceAt,
   revealRuntimeRuleIfUnshadowed,
   ruleTypeExamples,
-  runtimeRuleToRaw,
   sanitizeManualRules,
+  shouldShowEffectiveRuleRow,
   type LogicalRuleItem,
+  type ManualGroupDocument,
+  type ManualProxyDocument,
   type ManualRulesDocument,
-  type ParsedRule,
   type RuleDialogKind,
   type RuleForm,
   type RulePresetRouteState,
-  type RuleSource,
 } from '@/utils/rule-utils'
 
 type RuleDialogMode = 'add' | 'edit' | 'duplicate'
 
-interface ManagedRuleRow extends ParsedRule {
-  id: string
-  raw: string
-  enabled: boolean
-  lineNo: number
-  source: RuleSource
-  manualIndex?: number
-  searchText: string
-}
+type ManagedRuleRow = EffectiveRuleRow
 
 interface PolicyOptionGroup {
   key: 'builtin' | 'proxy' | 'group' | 'other'
   label: string
   options: string[]
+}
+
+interface PolicyLayerData {
+  baseProfileData: string
+  baseRules: string[]
+  manualProxies: ManualProxyDocument
+  manualGroups: ManualGroupDocument
 }
 
 const builtinProxyPolicies = ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS']
@@ -415,7 +427,14 @@ const getGeoipRegionLabel = (code: string, language: string) => {
   }
 }
 
-const getPolicyName = (item: unknown, fallback?: string) => {
+const emptyPolicyLayerData = (): PolicyLayerData => ({
+  baseProfileData: '',
+  baseRules: [],
+  manualProxies: { prepend: [], append: [], delete: [] },
+  manualGroups: { prepend: [], append: [], delete: [] },
+})
+
+const getRuntimePolicyName = (item: unknown, fallback?: string) => {
   if (item && typeof item === 'object' && 'name' in item) {
     const name = (item as { name?: unknown }).name
     if (typeof name === 'string' && name) return name
@@ -426,6 +445,14 @@ const getPolicyName = (item: unknown, fallback?: string) => {
 
 const ruleTableColumns =
   '40px 48px 64px minmax(132px, 180px) minmax(220px, 1fr) minmax(120px, 180px) 96px'
+
+const keepNonFallbackManualRule = (item: { raw: string; enabled: boolean }) =>
+  !item.enabled || !isMatchRuleRaw(item.raw)
+
+const removeActiveManualFallbackRules = (document: ManualRulesDocument) => {
+  document.prepend = document.prepend.filter(keepNonFallbackManualRule)
+  document.append = document.append.filter(keepNonFallbackManualRule)
+}
 
 const RuleTableHeader = () => {
   const { t } = useTranslation()
@@ -486,8 +513,9 @@ const RuleTableRow = (props: RuleRowProps) => {
     transition,
     isDragging,
   } = useSortable({ id: row.id, disabled: dragDisabled })
-  const sourceLabel =
-    row.source === 'runtime'
+  const sourceLabel = isEffectiveOverlayDeleteRuleRow(row)
+    ? t('rules.page.sources.disabledConfig')
+    : isEffectiveConfigRuleRow(row)
       ? t('rules.page.sources.runtime')
       : t('rules.page.sources.manual')
 
@@ -537,6 +565,7 @@ const RuleTableRow = (props: RuleRowProps) => {
       <Checkbox
         size="small"
         checked={row.enabled}
+        disabled={!row.canToggle}
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
         onChange={(event) => onToggleEnabled(row, event.target.checked)}
@@ -553,7 +582,7 @@ const RuleTableRow = (props: RuleRowProps) => {
         color="text.secondary"
         sx={{ fontVariantNumeric: 'tabular-nums' }}
       >
-        {row.lineNo}
+        {row.effectiveIndex + 1}
       </Typography>
       <Typography noWrap sx={{ fontWeight: 700 }}>
         {row.type || '-'}
@@ -597,6 +626,7 @@ interface RuleEditorDialogProps {
   policyOptionGroups: PolicyOptionGroup[]
   providerOptions: string[]
   policyDisabled?: boolean
+  typeDisabled?: boolean
   onClose: () => void
   onChange: (form: RuleForm) => void
   onSubmit: (form?: RuleForm) => void
@@ -611,6 +641,7 @@ const RuleEditorDialog = (props: RuleEditorDialogProps) => {
     policyOptionGroups,
     providerOptions,
     policyDisabled = false,
+    typeDisabled = false,
     onClose,
     onChange,
     onSubmit,
@@ -993,6 +1024,7 @@ const RuleEditorDialog = (props: RuleEditorDialogProps) => {
               >
                 <TextField
                   select
+                  disabled={typeDisabled}
                   label={t('rules.modals.editor.logical.operator')}
                   value={form.type}
                   onChange={(event) => updateForm({ type: event.target.value })}
@@ -1179,6 +1211,7 @@ const RuleEditorDialog = (props: RuleEditorDialogProps) => {
               >
                 <TextField
                   select
+                  disabled={typeDisabled}
                   label={t('rules.modals.editor.form.labels.type')}
                   value={form.type}
                   onChange={(event) => updateForm({ type: event.target.value })}
@@ -1318,12 +1351,16 @@ const RulesPage = () => {
   const { profiles, mutateProfiles } = useProfiles()
   const [searchText, setSearchText] = useState('')
   const [match, setMatch] = useState(() => (_: string) => true)
+  const [showDisabledConfigRules, setShowDisabledConfigRules] = useState(false)
   const [
     pendingRuntimeSuppressedSignatures,
     setPendingRuntimeSuppressedSignatures,
   ] = useState<Set<string>>(() => new Set())
   const [manualRules, setManualRules] = useState<ManualRulesDocument>(() =>
     emptyManualRules(),
+  )
+  const [policyLayerData, setPolicyLayerData] = useState<PolicyLayerData>(() =>
+    emptyPolicyLayerData(),
   )
   const [rulesUid, setRulesUid] = useState('')
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null)
@@ -1367,34 +1404,67 @@ const RulesPage = () => {
     [profiles],
   )
 
-  const policyOptionGroups = useMemo<PolicyOptionGroup[]>(() => {
+  const runtimePolicyNames = useMemo(() => {
     const proxyNames = new Set<string>()
     const groupNames = new Set<string>()
 
     const proxies = proxiesData?.proxies
     if (Array.isArray(proxies)) {
       proxies.forEach((proxy) => {
-        const name = getPolicyName(proxy)
+        const name = getRuntimePolicyName(proxy)
         if (name) proxyNames.add(name)
       })
     } else {
       Object.entries(proxies ?? {}).forEach(([key, proxy]) => {
-        const name = getPolicyName(proxy, key)
+        const name = getRuntimePolicyName(proxy, key)
         if (name) proxyNames.add(name)
       })
     }
 
     if (proxiesData?.global?.name) groupNames.add(proxiesData.global.name)
     ;(proxiesData?.groups ?? []).forEach((group: any) => {
-      const name = getPolicyName(group)
+      const name = getRuntimePolicyName(group)
       if (name) groupNames.add(name)
     })
 
+    return {
+      proxyNames: Array.from(proxyNames),
+      groupNames: Array.from(groupNames),
+    }
+  }, [proxiesData])
+
+  const effectivePolicyOptions = useMemo(
+    () =>
+      buildEffectivePolicyOptions({
+        builtinPolicies: builtinProxyPolicies,
+        baseProfileData: policyLayerData.baseProfileData,
+        manualProxies: policyLayerData.manualProxies,
+        manualGroups: policyLayerData.manualGroups,
+        runtimeProxyNames: runtimePolicyNames.proxyNames,
+        runtimeGroupNames: runtimePolicyNames.groupNames,
+      }),
+    [
+      policyLayerData.baseProfileData,
+      policyLayerData.manualGroups,
+      policyLayerData.manualProxies,
+      runtimePolicyNames.groupNames,
+      runtimePolicyNames.proxyNames,
+    ],
+  )
+
+  const policyOptionGroups = useMemo<PolicyOptionGroup[]>(() => {
     const builtinSet = new Set(builtinProxyPolicies)
-    const proxyOptions = Array.from(proxyNames)
+    const builtinOptions = effectivePolicyOptions
+      .filter((option) => option.type === 'builtin' && option.available)
+      .map((option) => option.name)
+    const proxyOptions = effectivePolicyOptions
+      .filter((option) => option.type === 'proxy' && option.available)
+      .map((option) => option.name)
       .filter((name) => !builtinSet.has(name))
       .sort((a, b) => a.localeCompare(b))
-    const groupOptions = Array.from(groupNames)
+    const groupOptions = effectivePolicyOptions
+      .filter((option) => option.type === 'group' && option.available)
+      .map((option) => option.name)
       .filter((name) => !builtinSet.has(name))
       .sort((a, b) => a.localeCompare(b))
 
@@ -1402,7 +1472,7 @@ const RulesPage = () => {
       {
         key: 'builtin',
         label: t('rules.page.policyGroups.builtin'),
-        options: builtinProxyPolicies,
+        options: builtinOptions,
       },
       {
         key: 'proxy',
@@ -1415,7 +1485,7 @@ const RulesPage = () => {
         options: groupOptions,
       },
     ]
-  }, [proxiesData, t])
+  }, [effectivePolicyOptions, t])
 
   const policyOptions = useMemo(
     () => policyOptionGroups.flatMap((group) => group.options),
@@ -1486,6 +1556,36 @@ const RulesPage = () => {
 
     return ensured.rulesUid
   }, [currentProfile?.uid])
+
+  const loadPolicyLayerData =
+    useCallback(async (): Promise<PolicyLayerData> => {
+      if (!currentProfile?.uid) return emptyPolicyLayerData()
+
+      const ensured = await ensureProfileProxies(currentProfile.uid)
+      const [baseProfileData, proxiesData, groupsData] = await Promise.all([
+        readProfileFile(ensured.profileUid),
+        readProfileFile(ensured.proxiesUid),
+        readProfileFile(ensured.groupsUid),
+      ])
+
+      if (
+        currentProfile.option?.proxies !== ensured.proxiesUid ||
+        currentProfile.option?.groups !== ensured.groupsUid
+      ) {
+        await mutateProfilesRef.current()
+      }
+
+      return {
+        baseProfileData,
+        baseRules: getProfileRuleRaws(baseProfileData),
+        manualProxies: normalizeManualProxyDocument(proxiesData),
+        manualGroups: normalizeManualGroupDocument(groupsData),
+      }
+    }, [
+      currentProfile?.option?.groups,
+      currentProfile?.option?.proxies,
+      currentProfile?.uid,
+    ])
 
   const releaseRuntimeSuppression = useCallback((signatures: string[]) => {
     if (signatures.length === 0) return
@@ -1582,106 +1682,65 @@ const RulesPage = () => {
     fetchManualRules()
   }, [fetchManualRules, profiles])
 
-  const rows = useMemo<ManagedRuleRow[]>(() => {
-    const manualRows = [
-      ...manualRules.prepend.map((item, index) => ({
-        raw: item.raw,
-        enabled: item.enabled,
-        source: 'prepend' as const,
-        manualIndex: index,
-      })),
-      ...manualRules.append.map((item, index) => ({
-        raw: item.raw,
-        enabled: item.enabled,
-        source: 'append' as const,
-        manualIndex: index,
-      })),
-    ]
+  useEffect(() => {
+    if (!profiles) return
 
-    const manualSignatures = new Set(
-      manualRows.map((row) => getRawRuleIdentitySignature(row.raw)),
-    )
-    const deletedSignatures = new Set(
-      manualRules.delete.map(getRawRuleIdentitySignature),
-    )
-    const deletedRows = manualRules.delete
-      .filter((raw) => !manualSignatures.has(getRawRuleIdentitySignature(raw)))
-      .map((raw, index) => {
-        const parsed = parseRuleRaw(raw)
-        return {
-          ...parsed,
-          id: `delete:${index}:${raw}`,
-          raw,
-          enabled: false,
-          source: 'runtime' as const,
-          searchText: makeSearchText(parsed, 'runtime', raw),
-        }
+    let cancelled = false
+
+    loadPolicyLayerData()
+      .then((data) => {
+        if (!cancelled) setPolicyLayerData(data)
+      })
+      .catch((err) => {
+        console.warn('[Rules] Failed to load effective policy options:', err)
+        if (!cancelled) setPolicyLayerData(emptyPolicyLayerData())
       })
 
-    const runtimeRows = rules
-      .map((rule, index) => {
-        const raw = runtimeRuleToRaw(rule)
-        const parsed = parseRuleRaw(raw)
-        return {
-          ...parsed,
-          id: `runtime:${index}:${raw}`,
-          raw,
-          enabled: true,
-          source: 'runtime' as const,
-          searchText: makeSearchText(parsed, 'runtime', raw),
-        }
-      })
-      .filter((row) => {
-        const signature = getRuleIdentitySignature(row)
-        return (
-          !manualSignatures.has(signature) &&
-          !deletedSignatures.has(signature) &&
-          !pendingRuntimeSuppressedSignatures.has(signature)
-        )
-      })
+    return () => {
+      cancelled = true
+    }
+  }, [loadPolicyLayerData, profiles])
 
-    return [
-      ...manualRules.prepend.map((item, index) => {
-        const parsed = parseRuleRaw(item.raw)
-        return {
-          ...parsed,
-          id: `prepend:${index}:${item.raw}`,
-          raw: item.raw,
-          enabled: item.enabled,
-          source: 'prepend' as const,
-          manualIndex: index,
-          searchText: makeSearchText(parsed, 'manual', item.raw),
-        }
+  const rows = useMemo<ManagedRuleRow[]>(
+    () =>
+      buildEffectiveRuleRows({
+        manualRules,
+        baseRules: policyLayerData.baseRules,
+        runtimeRules: rules,
+        pendingRuntimeSuppressedSignatures,
       }),
-      ...deletedRows,
-      ...runtimeRows,
-      ...manualRules.append.map((item, index) => {
-        const parsed = parseRuleRaw(item.raw)
-        return {
-          ...parsed,
-          id: `append:${index}:${item.raw}`,
-          raw: item.raw,
-          enabled: item.enabled,
-          source: 'append' as const,
-          manualIndex: index,
-          searchText: makeSearchText(parsed, 'manual', item.raw),
-        }
-      }),
-    ].map((row, index) => ({
-      ...row,
-      lineNo: index + 1,
-    }))
-  }, [manualRules, pendingRuntimeSuppressedSignatures, rules])
+    [
+      manualRules,
+      pendingRuntimeSuppressedSignatures,
+      policyLayerData.baseRules,
+      rules,
+    ],
+  )
+
+  const disabledConfigRuleCount = useMemo(
+    () => rows.filter(isEffectiveOverlayDeleteRuleRow).length,
+    [rows],
+  )
+
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) =>
+        shouldShowEffectiveRuleRow(row, { showDisabledConfigRules }),
+      ),
+    [rows, showDisabledConfigRules],
+  )
 
   const filteredRows = useMemo(
-    () => rows.filter((item) => match(item.searchText)),
-    [rows, match],
+    () => visibleRows.filter((item) => match(item.searchText)),
+    [visibleRows, match],
   )
 
   const effectiveSelectedRowId = useMemo(() => {
     if (!selectedRowId) return null
-    return rows.some((row) => row.id === selectedRowId) ? selectedRowId : null
-  }, [rows, selectedRowId])
+    return visibleRows.some((row) => row.id === selectedRowId)
+      ? selectedRowId
+      : null
+  }, [selectedRowId, visibleRows])
 
   const addRuntimeDeletesForRules = useCallback(
     (document: ManualRulesDocument, raws: string[]) => {
@@ -1689,7 +1748,7 @@ const RulesPage = () => {
 
       rows.forEach((row) => {
         if (
-          row.source === 'runtime' &&
+          isEffectiveRuntimeRuleRow(row) &&
           signatures.has(getRuleIdentitySignature(row))
         ) {
           addRuleDelete(document, row.raw)
@@ -1697,6 +1756,21 @@ const RulesPage = () => {
       })
     },
     [rows],
+  )
+
+  const applyFallbackRuleReplacement = useCallback(
+    (document: ManualRulesDocument, raw: string) => {
+      rows.forEach((row) => {
+        if (row.enabled && isMatchRuleRaw(row.raw)) {
+          addRuleDelete(document, row.raw)
+        }
+      })
+
+      removeActiveManualFallbackRules(document)
+      document.append.push(createManualRuleItem(raw))
+      addRuntimeDeletesForRules(document, [raw])
+    },
+    [addRuntimeDeletesForRules, rows],
   )
 
   const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
@@ -1734,13 +1808,16 @@ const RulesPage = () => {
 
   const applyDelete = useCallback(
     async (row: ManagedRuleRow) => {
+      if (!row.deletable) return
+
       const next = cloneManualRules(manualRules)
 
-      if (row.source === 'prepend') {
-        next.prepend = removeAt(next.prepend, row.manualIndex, row.raw)
-        revealRuntimeRuleIfUnshadowed(next, row.raw)
-      } else if (row.source === 'append') {
-        next.append = removeAt(next.append, row.manualIndex, row.raw)
+      if (isEffectiveManualRuleRow(row)) {
+        next[row.manualSection] = removeAt(
+          next[row.manualSection],
+          row.manualIndex,
+          row.raw,
+        )
         revealRuntimeRuleIfUnshadowed(next, row.raw)
       } else {
         addRuleDelete(next, row.raw)
@@ -1748,7 +1825,7 @@ const RulesPage = () => {
 
       setRowMenu(null)
       await saveManualRules(next, {
-        suppressRuntimeRaws: isManualRuleSource(row.source) ? [row.raw] : [],
+        suppressRuntimeRaws: isEffectiveManualRuleRow(row) ? [row.raw] : [],
       })
     },
     [manualRules, saveManualRules],
@@ -1756,14 +1833,25 @@ const RulesPage = () => {
 
   const handleSubmitDialog = useLockFn(async (submittedForm?: RuleForm) => {
     const currentForm = submittedForm ?? form
-    const raw = buildRuleRaw(currentForm)
+    const effectiveForm =
+      dialogMode === 'edit' &&
+      activeRow &&
+      isEffectiveFallbackRuleRow(activeRow)
+        ? {
+            ...currentForm,
+            type: 'MATCH',
+            value: '',
+            noResolve: false,
+          }
+        : currentForm
+    const raw = buildRuleRaw(effectiveForm)
 
-    if (!currentForm.type || !currentForm.policy) {
+    if (!effectiveForm.type || !effectiveForm.policy) {
       showNotice.error('rules.page.validation.required')
       return
     }
 
-    if (currentForm.type !== 'MATCH' && !currentForm.value.trim()) {
+    if (effectiveForm.type !== 'MATCH' && !effectiveForm.value.trim()) {
       showNotice.error('rules.modals.editor.form.validation.conditionRequired')
       return
     }
@@ -1771,12 +1859,13 @@ const RulesPage = () => {
     const next = cloneManualRules(manualRules)
 
     if (dialogMode === 'edit' && activeRow) {
-      if (activeRow.source === 'runtime') {
-        addRuleDelete(next, activeRow.raw)
-        next.prepend.unshift(createManualRuleItem(raw))
-      } else if (isManualRuleSource(activeRow.source)) {
-        next[activeRow.source] = replaceAt(
-          next[activeRow.source],
+      if (isEffectiveFallbackRuleRow(activeRow)) {
+        applyFallbackRuleReplacement(next, raw)
+      } else if (isEffectiveConfigRuleRow(activeRow)) {
+        addRuleOverlayReplacement(next, activeRow.raw, raw)
+      } else if (isEffectiveManualRuleRow(activeRow)) {
+        next[activeRow.manualSection] = replaceAt(
+          next[activeRow.manualSection],
           activeRow.manualIndex,
           activeRow.raw,
           raw,
@@ -1785,33 +1874,44 @@ const RulesPage = () => {
         revealRuntimeRuleIfUnshadowed(next, activeRow.raw)
       }
 
-      if (activeRow.source === 'runtime' || activeRow.enabled) {
+      if (isEffectiveFallbackRuleRow(activeRow)) {
+        // The fallback path has already cleaned up active MATCH candidates.
+      } else if (isEffectiveConfigRuleRow(activeRow)) {
+        // Config/runtime edits are represented as delete + local replacement.
+      } else if (activeRow.enabled) {
         addRuntimeDeletesForRules(next, [raw])
       } else {
         addRuleDelete(next, raw)
       }
       setDialogOpen(false)
       await saveManualRules(next, {
-        suppressRuntimeRaws:
-          activeRow.source === 'runtime' ? [] : [activeRow.raw],
+        suppressRuntimeRaws: isEffectiveConfigRuleRow(activeRow)
+          ? []
+          : [activeRow.raw],
       })
       return
     }
 
     if (dialogMode === 'add' || dialogMode === 'duplicate' || !activeRow) {
+      if (dialogMode === 'duplicate' && activeRow?.locked) {
+        setDialogOpen(false)
+        return
+      }
+
       const targetRow =
         dialogMode === 'duplicate'
           ? activeRow
           : rows.find((row) => row.id === effectiveSelectedRowId)
 
-      if (targetRow && isManualRuleSource(targetRow.source)) {
+      if (targetRow && isEffectiveManualRuleRow(targetRow)) {
         const insertIndex =
-          (targetRow.manualIndex ?? 0) + (dialogMode === 'duplicate' ? 1 : 0)
-        next[targetRow.source] = insertAt(
-          next[targetRow.source],
+          (targetRow.manualIndex ?? 0) +
+          (dialogMode === 'duplicate' && !targetRow.locked ? 1 : 0)
+        next[targetRow.manualSection] = insertAt(
+          next[targetRow.manualSection],
           insertIndex,
           raw,
-          targetRow.enabled,
+          targetRow.locked ? true : targetRow.enabled,
         )
       } else {
         next.prepend.unshift(createManualRuleItem(raw))
@@ -1847,10 +1947,12 @@ const RulesPage = () => {
 
   const handleToggleRuleEnabled = useCallback(
     async (row: ManagedRuleRow, enabled: boolean) => {
+      if (!row.canToggle) return
+
       const next = cloneManualRules(manualRules)
 
-      if (isManualRuleSource(row.source)) {
-        const list = next[row.source]
+      if (isEffectiveManualRuleRow(row)) {
+        const list = next[row.manualSection]
         const signature = getRawRuleIdentitySignature(row.raw)
         const index =
           typeof row.manualIndex === 'number' &&
@@ -1900,9 +2002,11 @@ const RulesPage = () => {
       if (
         !activeRow ||
         !overRow ||
-        !isManualRuleSource(activeRow.source) ||
-        !isManualRuleSource(overRow.source) ||
-        activeRow.source !== overRow.source ||
+        activeRow.locked ||
+        overRow.locked ||
+        !isEffectiveManualRuleRow(activeRow) ||
+        !isEffectiveManualRuleRow(overRow) ||
+        activeRow.manualSection !== overRow.manualSection ||
         activeRow.manualIndex === undefined ||
         overRow.manualIndex === undefined
       ) {
@@ -1910,8 +2014,8 @@ const RulesPage = () => {
       }
 
       const next = cloneManualRules(manualRules)
-      next[activeRow.source] = arrayMove(
-        next[activeRow.source],
+      next[activeRow.manualSection] = arrayMove(
+        next[activeRow.manualSection],
         activeRow.manualIndex,
         overRow.manualIndex,
       )
@@ -1920,6 +2024,26 @@ const RulesPage = () => {
     },
     [dragDisabled, manualRules, rows, saveManualRules],
   )
+
+  const rowMenuAction = rowMenu?.row
+    ? isEffectiveOverlayDeleteRuleRow(rowMenu.row) && rowMenu.row.canToggle
+      ? 'restore'
+      : rowMenu.row.deletable && isEffectiveManualRuleRow(rowMenu.row)
+        ? 'delete'
+        : rowMenu.row.deletable && isEffectiveConfigRuleRow(rowMenu.row)
+          ? 'disable'
+          : null
+    : null
+
+  const handleDisableRow = async (row: ManagedRuleRow) => {
+    setRowMenu(null)
+    await handleToggleRuleEnabled(row, false)
+  }
+
+  const handleRestoreRow = async (row: ManagedRuleRow) => {
+    setRowMenu(null)
+    await handleToggleRuleEnabled(row, true)
+  }
 
   return (
     <BasePage
@@ -1954,10 +2078,32 @@ const RulesPage = () => {
           alignItems: 'center',
         }}
       >
-        <BaseSearchBox
-          onSearch={(match, state: SearchState) => {
-            setSearchText(state.text)
-            setMatch(() => match)
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <BaseSearchBox
+            onSearch={(match, state: SearchState) => {
+              setSearchText(state.text)
+              setMatch(() => match)
+            }}
+          />
+        </Box>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={showDisabledConfigRules}
+              disabled={disabledConfigRuleCount === 0}
+              onChange={(event) =>
+                setShowDisabledConfigRules(event.target.checked)
+              }
+            />
+          }
+          label={t('rules.page.actions.showDisabledConfig')}
+          sx={{
+            ml: 1,
+            mr: 0,
+            whiteSpace: 'nowrap',
+            color: 'text.secondary',
+            '.MuiFormControlLabel-label': { fontSize: 13 },
           }}
         />
       </Box>
@@ -1990,7 +2136,11 @@ const RulesPage = () => {
                     key={row.id}
                     row={row}
                     selected={effectiveSelectedRowId === row.id}
-                    dragDisabled={dragDisabled || row.source === 'runtime'}
+                    dragDisabled={
+                      dragDisabled ||
+                      row.locked ||
+                      !isEffectiveManualRuleRow(row)
+                    }
                     onSelect={handleSelectRow}
                     onEdit={(row) => openRowDialog(row, 'edit')}
                     onToggleEnabled={handleToggleRuleEnabled}
@@ -2049,29 +2199,46 @@ const RulesPage = () => {
           </ListItemIcon>
           {t('rules.page.actions.edit')}
         </MenuItem>
-        <MenuItem
-          onClick={() =>
-            rowMenu?.row && openRowDialog(rowMenu.row, 'duplicate')
-          }
-        >
-          <ListItemIcon>
-            <ContentCopyRounded fontSize="small" />
-          </ListItemIcon>
-          {t('rules.page.actions.duplicate')}
-        </MenuItem>
-        {rowMenu?.row &&
-        (isManualRuleSource(rowMenu.row.source) || rowMenu.row.enabled) ? (
+        {rowMenu?.row && !rowMenu.row.locked ? (
+          <MenuItem onClick={() => openRowDialog(rowMenu.row, 'duplicate')}>
+            <ListItemIcon>
+              <ContentCopyRounded fontSize="small" />
+            </ListItemIcon>
+            {t('rules.page.actions.duplicate')}
+          </MenuItem>
+        ) : null}
+        {rowMenu?.row && rowMenuAction ? (
           <>
             <Divider />
-            <MenuItem
-              onClick={() => rowMenu?.row && applyDelete(rowMenu.row)}
-              sx={{ color: 'error.main' }}
-            >
-              <ListItemIcon>
-                <DeleteRounded color="error" fontSize="small" />
-              </ListItemIcon>
-              {t('rules.page.actions.delete')}
-            </MenuItem>
+            {rowMenuAction === 'restore' ? (
+              <MenuItem
+                onClick={() => rowMenu?.row && handleRestoreRow(rowMenu.row)}
+              >
+                <ListItemIcon>
+                  <RestoreRounded fontSize="small" />
+                </ListItemIcon>
+                {t('rules.page.actions.restore')}
+              </MenuItem>
+            ) : rowMenuAction === 'disable' ? (
+              <MenuItem
+                onClick={() => rowMenu?.row && handleDisableRow(rowMenu.row)}
+              >
+                <ListItemIcon>
+                  <BlockRounded fontSize="small" />
+                </ListItemIcon>
+                {t('rules.page.actions.disable')}
+              </MenuItem>
+            ) : (
+              <MenuItem
+                onClick={() => rowMenu?.row && applyDelete(rowMenu.row)}
+                sx={{ color: 'error.main' }}
+              >
+                <ListItemIcon>
+                  <DeleteRounded color="error" fontSize="small" />
+                </ListItemIcon>
+                {t('rules.page.actions.delete')}
+              </MenuItem>
+            )}
           </>
         ) : null}
       </Menu>
@@ -2084,6 +2251,9 @@ const RulesPage = () => {
         form={form}
         policyOptionGroups={policyOptionGroups}
         providerOptions={providerOptions}
+        typeDisabled={Boolean(
+          activeRow && isEffectiveFallbackRuleRow(activeRow),
+        )}
         onClose={() => setDialogOpen(false)}
         onChange={setForm}
         onSubmit={handleSubmitDialog}

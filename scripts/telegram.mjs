@@ -27,7 +27,7 @@ async function sendTelegramNotification() {
     process.env.BUILD_TYPE?.includes('autobuild') ||
     version.includes('autobuild')
   const repository =
-    process.env.GITHUB_REPOSITORY || 'clash-verge-rev/clash-verge-rev'
+    process.env.GITHUB_REPOSITORY || 'micheal-death/clash-verge-rev'
   const autobuildTag = process.env.BUILD_TYPE?.includes('autobuild')
     ? process.env.BUILD_TYPE
     : 'autobuild'
