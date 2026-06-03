@@ -32,13 +32,15 @@ A Clash Meta GUI based on <a href="https://github.com/tauri-apps/tauri">Tauri</a
 Go to the [Custom AutoBuild release](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) to download this fork's personal build.<br>
 Current custom builds only publish Windows x64 and macOS Apple Silicon installers.
 
-#### 我应当怎样选择发行版
+### 我应当怎样选择发行版
 
 | 版本             | 特征                           | 链接                                                                                                 |
 | :--------------- | :----------------------------- | :--------------------------------------------------------------------------------------------------- |
 | Custom AutoBuild | 自用滚动构建，包含个人分支改动。 | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
-#### 安装说明和常见问题，请查看本仓库 README。
+### 安装说明和常见问题
+
+请查看本仓库 README。
 
 
 ---

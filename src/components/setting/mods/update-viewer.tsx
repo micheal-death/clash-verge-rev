@@ -14,7 +14,10 @@ import { useUpdate } from '@/hooks/use-update'
 import { portableFlag } from '@/pages/_layout'
 import { showNotice } from '@/services/notice-service'
 import { useSetUpdateState, useUpdateState } from '@/services/states'
-import { CUSTOM_AUTOBUILD_RELEASE_URL } from '@/utils/external-links'
+import {
+  CUSTOM_AUTOBUILD_RELEASE_URL,
+  CUSTOM_REPOSITORY_URL,
+} from '@/utils/external-links'
 
 type MarkdownNode = {
   type: string
@@ -113,6 +116,13 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const setUpdateState = useSetUpdateState()
 
   const { updateInfo } = useUpdate()
+  const releaseUrl = useMemo(() => {
+    const tagName = updateInfo?.rawJson.tag_name
+
+    return typeof tagName === 'string' && tagName.trim()
+      ? `${CUSTOM_REPOSITORY_URL}/releases/tag/${encodeURIComponent(tagName.trim())}`
+      : CUSTOM_AUTOBUILD_RELEASE_URL
+  }, [updateInfo])
 
   const [downloaded, setDownloaded] = useState(0)
   const [total, setTotal] = useState(0)
@@ -229,7 +239,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
             size="small"
             sx={{ whiteSpace: 'nowrap' }}
             onClick={() => {
-              openUrl(CUSTOM_AUTOBUILD_RELEASE_URL)
+              openUrl(releaseUrl)
             }}
           >
             {t('settings.modals.update.actions.goToRelease')}

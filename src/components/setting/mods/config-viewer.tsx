@@ -27,12 +27,13 @@ export const ConfigViewer = forwardRef<DialogRef, ConfigViewerProps>(
         setConfigText('')
         setLoading(true)
         setOpen(true)
+        const fallbackText = `# Error getting ${path}\n`
         getRuntimeYaml()
           .then((data) => {
-            setConfigText(data ?? '# Error getting runtime yaml\n')
+            setConfigText(data ?? fallbackText)
           })
           .catch(() => {
-            setConfigText('# Error getting runtime yaml\n')
+            setConfigText(fallbackText)
           })
           .finally(() => {
             setLoading(false)

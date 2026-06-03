@@ -130,10 +130,16 @@ export const resolveRemoteVersion = (update: Update): string | null => {
 }
 
 const localVersionNormalized = normalizeVersion(appVersion)
+const isDevelopmentBuild = import.meta.env.DEV
 
 export const checkUpdateSafe = async (
   options?: CheckOptions,
 ): Promise<Update | null> => {
+  if (isDevelopmentBuild) {
+    console.info('[updater] skipped update check in development mode')
+    return null
+  }
+
   const result = await check({ ...(options ?? {}), allowDowngrades: false })
   if (!result) return null
 

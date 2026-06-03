@@ -486,6 +486,7 @@ const RuleTableHeader = () => {
 
 interface RuleRowProps {
   row: ManagedRuleRow
+  displayIndex: number
   selected: boolean
   dragDisabled: boolean
   onSelect: (row: ManagedRuleRow) => void
@@ -497,6 +498,7 @@ interface RuleRowProps {
 const RuleTableRow = (props: RuleRowProps) => {
   const {
     row,
+    displayIndex,
     selected,
     dragDisabled,
     onSelect,
@@ -582,7 +584,7 @@ const RuleTableRow = (props: RuleRowProps) => {
         color="text.secondary"
         sx={{ fontVariantNumeric: 'tabular-nums' }}
       >
-        {row.effectiveIndex + 1}
+        {displayIndex + 1}
       </Typography>
       <Typography noWrap sx={{ fontWeight: 700 }}>
         {row.type || '-'}
@@ -2131,10 +2133,11 @@ const RulesPage = () => {
                 items={filteredRows.map((row) => row.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {filteredRows.map((row) => (
+                {filteredRows.map((row, displayIndex) => (
                   <RuleTableRow
                     key={row.id}
                     row={row}
+                    displayIndex={displayIndex}
                     selected={effectiveSelectedRowId === row.id}
                     dragDisabled={
                       dragDisabled ||

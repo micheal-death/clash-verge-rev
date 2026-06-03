@@ -16,10 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule",
-      "disable": "Disable Rule",
-      "restore": "Restore Rule",
-      "showDisabledConfig": "Show disabled config rules"
+      "delete": "Kuralı Sil",
+      "disable": "Kuralı Devre Dışı Bırak",
+      "restore": "Kuralı Geri Yükle",
+      "showDisabledConfig": "Devre dışı bırakılmış yapılandırma kurallarını göster"
     },
     "table": {
       "id": "ID",
@@ -32,8 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config",
-      "disabledConfig": "Disabled Config"
+      "runtime": "Yapılandırma",
+      "disabledConfig": "Devre dışı yapılandırma"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

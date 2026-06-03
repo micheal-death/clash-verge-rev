@@ -36,7 +36,9 @@ Clash Meta GUI базируется на <a href="https://github.com/tauri-apps/
 | :--------------- | :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
 | Custom AutoBuild | Личная rolling-сборка с изменениями этого fork.     | [Custom AutoBuild](https://github.com/micheal-death/clash-verge-rev/releases/tag/custom-autobuild) |
 
-#### Инструкции по установке и ответы на часто задаваемые вопросы находятся в [README](https://github.com/micheal-death/clash-verge-rev#readme) этого репозитория.
+#### Инструкции и ответы на вопросы
+
+Смотрите [README](https://github.com/micheal-death/clash-verge-rev#readme) этого репозитория.
 
 
 ---

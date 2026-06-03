@@ -65,16 +65,16 @@
       "editRules": "Regeln bearbeiten",
       "editProxies": "Knoten bearbeiten",
       "editGroups": "Proxy-Gruppen bearbeiten",
-      "extendConfig": "Lokale Overlay-Konfiguration bearbeiten",
-      "extendScript": "Lokales Overlay-Skript bearbeiten",
+      "extendConfig": "Verwaltete Overlay-Konfiguration bearbeiten",
+      "extendScript": "Verwaltetes Overlay-Skript bearbeiten",
       "openFile": "Datei öffnen",
       "update": "Aktualisieren",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "Lokale Overlay-Konfiguration",
-        "script": "Lokales Overlay-Skript"
+        "merge": "Verwaltete Overlay-Konfiguration",
+        "script": "Verwaltetes Overlay-Skript"
       },
       "chips": {
         "merge": "Merge",

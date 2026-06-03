@@ -243,6 +243,9 @@ const getPolicyItemName = (item: unknown) => {
   return typeof name === 'string' ? name.trim() : ''
 }
 
+const isPlainObject = (item: unknown): item is Record<string, unknown> =>
+  !!item && typeof item === 'object' && !Array.isArray(item)
+
 export const normalizePolicyDeleteNames = (value: unknown): string[] =>
   Array.isArray(value)
     ? Array.from(
@@ -315,14 +318,16 @@ export const normalizeManualRules = (data: string): ManualRulesDocument => {
 const toProxyItems = (value: unknown) =>
   Array.isArray(value)
     ? value.filter(
-        (item): item is IProxyConfig => getPolicyItemName(item).length > 0,
+        (item): item is IProxyConfig =>
+          isPlainObject(item) && getPolicyItemName(item).length > 0,
       )
     : []
 
 const toGroupItems = (value: unknown) =>
   Array.isArray(value)
     ? value.filter(
-        (item): item is IProxyGroupConfig => getPolicyItemName(item).length > 0,
+        (item): item is IProxyGroupConfig =>
+          isPlainObject(item) && getPolicyItemName(item).length > 0,
       )
     : []
 
@@ -990,6 +995,7 @@ export const addRuleOverlayReplacement = (
   replacementRaw: string,
 ) => {
   addRuleDelete(document, originalRaw)
+  addRuleDelete(document, replacementRaw)
   document.prepend.unshift(createManualRuleItem(replacementRaw))
 }
 

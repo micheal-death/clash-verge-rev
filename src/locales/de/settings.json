@@ -359,7 +359,7 @@
         "scheduleHelper": "Create local backups in the background at the configured interval.",
         "intervalLabel": "Backup frequency",
         "changeLabel": "Backup on critical changes",
-        "changeHelper": "Automatically backup when Managed Overlay Config/Script changes.",
+        "changeHelper": "Automatisch sichern, wenn sich die Managed-Overlay-Konfiguration oder das Skript ändert.",
         "options": {
           "hours": "Every {{n}} hours",
           "days": "Every {{n}} days"

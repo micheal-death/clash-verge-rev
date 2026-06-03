@@ -16,10 +16,10 @@
       "ruleset": "Ruleset",
       "edit": "Edit Rule",
       "duplicate": "Duplicate Rule",
-      "delete": "Delete Rule",
-      "disable": "Disable Rule",
-      "restore": "Restore Rule",
-      "showDisabledConfig": "Show disabled config rules"
+      "delete": "규칙 삭제",
+      "disable": "규칙 비활성화",
+      "restore": "규칙 복원",
+      "showDisabledConfig": "비활성화된 구성 규칙 보기"
     },
     "table": {
       "id": "ID",
@@ -32,8 +32,8 @@
     },
     "sources": {
       "manual": "Manual",
-      "runtime": "Config",
-      "disabledConfig": "Disabled Config"
+      "runtime": "구성",
+      "disabledConfig": "비활성화된 구성"
     },
     "policyGroups": {
       "builtin": "Built-in Policies",

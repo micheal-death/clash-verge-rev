@@ -366,7 +366,7 @@ test('config rule replacement writes delete marker and local replacement', () =>
       },
     ],
     append: [],
-    delete: ['DOMAIN,base.test,DIRECT'],
+    delete: ['DOMAIN,base.test,DIRECT', 'DOMAIN,base.test,proxy-default'],
   })
 
   const rows = buildEffectiveRuleRows({
@@ -390,6 +390,48 @@ test('config rule replacement writes delete marker and local replacement', () =>
     [
       ['manual', 'DOMAIN,base.test,proxy-default'],
       ['overlay-delete', 'DOMAIN,base.test,DIRECT'],
+    ],
+  )
+})
+
+test('config rule replacement suppresses matching base replacement rows', () => {
+  const manualRules = {
+    prepend: [],
+    append: [],
+    delete: [],
+  }
+
+  addRuleOverlayReplacement(
+    manualRules,
+    'DOMAIN,old.test,DIRECT',
+    'DOMAIN,existing.test,DIRECT',
+  )
+  assert.deepEqual(manualRules.delete, [
+    'DOMAIN,old.test,DIRECT',
+    'DOMAIN,existing.test,DIRECT',
+  ])
+
+  const rows = buildEffectiveRuleRows({
+    manualRules: sanitizeManualRules(manualRules),
+    baseRules: ['DOMAIN,old.test,DIRECT', 'DOMAIN,existing.test,DIRECT'],
+    runtimeRules: [],
+  })
+
+  assert.deepEqual(
+    rows
+      .filter((row) => shouldShowEffectiveRuleRow(row))
+      .map((row) => [row.source, row.raw]),
+    [['manual', 'DOMAIN,existing.test,DIRECT']],
+  )
+  assert.deepEqual(
+    rows
+      .filter((row) =>
+        shouldShowEffectiveRuleRow(row, { showDisabledConfigRules: true }),
+      )
+      .map((row) => [row.source, row.raw]),
+    [
+      ['manual', 'DOMAIN,existing.test,DIRECT'],
+      ['overlay-delete', 'DOMAIN,old.test,DIRECT'],
     ],
   )
 })
@@ -484,6 +526,8 @@ const emptyManualRulesForTest = () => ({
 test('builds effective policy options from base, overlay, and runtime sources', () => {
   const manualProxies = normalizeManualProxyDocument(`
 prepend:
+  - stray-proxy-name
+  - type: ss
   - name: manual-proxy
     type: ss
 append: []
@@ -492,6 +536,8 @@ delete:
 `)
   const manualGroups = normalizeManualGroupDocument(`
 prepend:
+  - stray-group-name
+  - type: select
   - name: proxy-default
     type: select
     proxies:

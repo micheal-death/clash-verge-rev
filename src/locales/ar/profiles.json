@@ -65,16 +65,16 @@
       "editRules": "تعديل القواعد",
       "editProxies": "تعديل الوكلاء",
       "editGroups": "تعديل مجموعات الوكلاء",
-      "extendConfig": "تعديل تكوين الطبقة المحلية",
-      "extendScript": "تعديل سكربت الطبقة المحلية",
+      "extendConfig": "تعديل تكوين التراكب المُدار",
+      "extendScript": "تعديل سكربت التراكب المُدار",
       "openFile": "فتح الملف",
       "update": "تحديث",
       "updateViaProxy": "Update via proxy"
     },
     "more": {
       "global": {
-        "merge": "تكوين الطبقة المحلية",
-        "script": "سكربت الطبقة المحلية"
+        "merge": "تكوين التراكب المُدار",
+        "script": "سكربت التراكب المُدار"
       },
       "chips": {
         "merge": "Merge",
