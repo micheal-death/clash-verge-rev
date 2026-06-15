@@ -766,6 +766,7 @@ export const translationKeys = [
   'settings.modals.update.actions.update',
   'settings.modals.update.messages.portableError',
   'settings.modals.update.messages.breakChangeError',
+  'settings.modals.update.messages.fallback',
   'settings.modals.sysproxy.title',
   'settings.modals.sysproxy.fieldsets.currentStatus',
   'settings.modals.sysproxy.fields.enableStatus',

@@ -124,21 +124,30 @@ impl Hotkey {
                 });
             }
             HotkeyFunction::ClashModeRule => {
-                AsyncHandler::spawn(async move || {
-                    feat::change_clash_mode("rule".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Rule" }).await;
+                AsyncHandler::spawn(async move || match feat::change_clash_mode("rule".into()).await {
+                    Ok(_) => notify_event(NotificationEvent::ClashModeChanged { mode: "Rule" }).await,
+                    Err(err) => {
+                        logging!(error, Type::Hotkey, "Failed to change clash mode to rule: {err}");
+                        handle::Handle::notice_message("set_config::error", err.to_string());
+                    }
                 });
             }
             HotkeyFunction::ClashModeGlobal => {
-                AsyncHandler::spawn(async move || {
-                    feat::change_clash_mode("global".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Global" }).await;
+                AsyncHandler::spawn(async move || match feat::change_clash_mode("global".into()).await {
+                    Ok(_) => notify_event(NotificationEvent::ClashModeChanged { mode: "Global" }).await,
+                    Err(err) => {
+                        logging!(error, Type::Hotkey, "Failed to change clash mode to global: {err}");
+                        handle::Handle::notice_message("set_config::error", err.to_string());
+                    }
                 });
             }
             HotkeyFunction::ClashModeDirect => {
-                AsyncHandler::spawn(async move || {
-                    feat::change_clash_mode("direct".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Direct" }).await;
+                AsyncHandler::spawn(async move || match feat::change_clash_mode("direct".into()).await {
+                    Ok(_) => notify_event(NotificationEvent::ClashModeChanged { mode: "Direct" }).await,
+                    Err(err) => {
+                        logging!(error, Type::Hotkey, "Failed to change clash mode to direct: {err}");
+                        handle::Handle::notice_message("set_config::error", err.to_string());
+                    }
                 });
             }
             HotkeyFunction::ToggleSystemProxy => {

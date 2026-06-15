@@ -1307,6 +1307,7 @@ export interface TranslationResources {
           }
           messages: {
             breakChangeError: string
+            fallback: string
             portableError: string
           }
           title: string
