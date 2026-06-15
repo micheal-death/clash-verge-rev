@@ -171,6 +171,7 @@ impl IClashTemp {
             mixed_port: Self::guard_mixed_port(config),
             socks_port: Self::guard_socks_port(config),
             port: Self::guard_port(config),
+            mode: config.get("mode").and_then(Value::as_str).unwrap_or("rule").to_string(),
             server: Self::guard_client_ctrl(config),
             secret: config.get("secret").and_then(|value| match value {
                 Value::String(val_str) => Some(val_str.clone()),
@@ -331,6 +332,8 @@ pub struct ClashInfo {
     pub mixed_port: u16,
     pub socks_port: u16,
     pub port: u16,
+    /// clash mode
+    pub mode: String,
     /// same as `external-controller`
     pub server: String,
     /// clash secret
@@ -352,6 +355,7 @@ fn test_clash_info() {
             mixed_port: port,
             socks_port: 7898,
             port: 7899,
+            mode: "rule".into(),
             server: server.into(),
             secret: None,
         }

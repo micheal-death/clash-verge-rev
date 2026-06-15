@@ -5,6 +5,7 @@ use crate::{
     process::AsyncHandler,
     utils,
 };
+use anyhow::{Result, anyhow, bail};
 use bytes::BytesMut;
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
@@ -79,36 +80,85 @@ fn after_change_clash_mode() {
     });
 }
 
-/// Change Clash mode (rule/global/direct/script)
-pub async fn change_clash_mode(mode: String) {
-    let mut mapping = Mapping::new();
-    mapping.insert(Value::from("mode"), Value::from(mode.as_str()));
-    // Convert YAML mapping to JSON Value
-    let json_value = serde_json::json!({
-        "mode": mode
-    });
-    logging!(debug, Type::Core, "change clash mode to {mode}");
-    match handle::Handle::mihomo().await.patch_base_config(&json_value).await {
-        Ok(_) => {
-            // 更新订阅
-            let clash = Config::clash().await;
-            clash.edit_draft(|d| d.patch_config(&mapping));
-            clash.apply();
+fn normalize_clash_mode(mode: &str) -> Result<(&'static str, &'static str)> {
+    match mode.trim().to_ascii_lowercase().as_str() {
+        "rule" => Ok(("rule", "Rule")),
+        "global" => Ok(("global", "Global")),
+        "direct" => Ok(("direct", "Direct")),
+        _ => bail!("invalid clash mode: {mode}"),
+    }
+}
 
-            // 分离数据获取和异步调用
-            let clash_data = clash.data_arc();
-            if clash_data.save_config().await.is_ok() {
-                handle::Handle::refresh_clash();
-                tray::Tray::global().update_menu_and_icon().await;
-            }
+async fn patch_mihomo_mode(normalized_mode: &str, api_mode: &str) -> Result<()> {
+    let mihomo = handle::Handle::mihomo().await;
+    let candidates = [api_mode, normalized_mode];
+    let mut last_error: Option<std::string::String> = None;
 
-            let is_auto_close_connection = Config::verge().await.data_arc().auto_close_connection.unwrap_or(false);
-            if is_auto_close_connection {
-                after_change_clash_mode();
+    for candidate in candidates {
+        let json_value = serde_json::json!({
+            "mode": candidate
+        });
+
+        match mihomo.patch_base_config(&json_value).await {
+            Ok(_) => match mihomo.get_base_config().await {
+                Ok(config) if config.mode.to_string() == normalized_mode => return Ok(()),
+                Ok(config) => {
+                    let message = format!(
+                        "mihomo accepted mode patch as {candidate}, but current mode is {}",
+                        config.mode
+                    );
+                    logging!(warn, Type::Core, "{message}");
+                    last_error = Some(message);
+                }
+                Err(err) => {
+                    let message = format!("failed to verify clash mode after patching {candidate}: {err}");
+                    logging!(debug, Type::Core, "{message}");
+                    // Newer Mihomo may add fields that the typed plugin model cannot decode.
+                    // A successful PATCH is enough to keep the UI and local config in sync.
+                    return Ok(());
+                }
+            },
+            Err(err) => {
+                let message = format!("failed to patch clash mode as {candidate}: {err}");
+                logging!(warn, Type::Core, "{message}");
+                last_error = Some(message);
             }
         }
-        Err(err) => logging!(error, Type::Core, "{err}"),
     }
+
+    Err(anyhow!(
+        "{}",
+        last_error.unwrap_or_else(|| format!("failed to change clash mode to {normalized_mode}"))
+    ))
+}
+
+/// Change Clash mode (rule/global/direct/script)
+pub async fn change_clash_mode(mode: String) -> Result<()> {
+    let (normalized_mode, api_mode) = normalize_clash_mode(mode.as_str())?;
+    let mut mapping = Mapping::new();
+    mapping.insert(Value::from("mode"), Value::from(normalized_mode));
+
+    logging!(debug, Type::Core, "change clash mode to {normalized_mode}");
+    patch_mihomo_mode(normalized_mode, api_mode).await?;
+
+    // 更新订阅
+    let clash = Config::clash().await;
+    clash.edit_draft(|d| d.patch_config(&mapping));
+    clash.apply();
+
+    // 分离数据获取和异步调用
+    let clash_data = clash.data_arc();
+    if clash_data.save_config().await.is_ok() {
+        handle::Handle::refresh_clash();
+        tray::Tray::global().update_menu_and_icon().await;
+    }
+
+    let is_auto_close_connection = Config::verge().await.data_arc().auto_close_connection.unwrap_or(false);
+    if is_auto_close_connection {
+        after_change_clash_mode();
+    }
+
+    Ok(())
 }
 
 /// Test delay to a URL through proxy.

@@ -79,6 +79,7 @@ const BUILTIN_PROXY_NAMES = new Set([
   'REJECT',
   'REJECT-DROP',
   'PASS',
+  'PASS-RULE',
   'COMPATIBLE',
 ])
 
@@ -88,7 +89,15 @@ function isProxyAsset(proxy: IProxyItem | undefined) {
 
   return (
     !BUILTIN_PROXY_NAMES.has(proxy.name.toUpperCase()) &&
-    !['direct', 'reject', 'reject-drop', 'pass', 'compatible'].includes(type)
+    ![
+      'direct',
+      'reject',
+      'reject-drop',
+      'rejectdrop',
+      'pass',
+      'passrule',
+      'compatible',
+    ].includes(type)
   )
 }
 

@@ -260,6 +260,7 @@ interface IClashInfo {
   redir_port?: number // clash redir port
   tproxy_port?: number // clash tproxy port
   port?: number // clash http port
+  mode?: string // clash mode
   server?: string // external-controller
   secret?: string
 }

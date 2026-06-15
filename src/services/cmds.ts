@@ -1,6 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import dayjs from 'dayjs'
-import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
+import {
+  type BaseConfig,
+  getBaseConfig,
+  getProxies,
+  getProxyProviders,
+} from 'tauri-plugin-mihomo-api'
 
 import { showNotice } from '@/services/notice-service'
 import { debugLog } from '@/utils/debug'
@@ -94,6 +99,34 @@ export async function getClashInfo() {
   return invoke<IClashInfo | null>('get_clash_info')
 }
 
+const CLASH_MODES = ['rule', 'global', 'direct'] as const
+
+function normalizeClashMode(mode?: string) {
+  const normalized = mode?.toLowerCase()
+  return CLASH_MODES.includes(normalized as (typeof CLASH_MODES)[number])
+    ? normalized
+    : 'rule'
+}
+
+export async function getClashBaseConfig(): Promise<BaseConfig> {
+  try {
+    return await getBaseConfig()
+  } catch (error) {
+    debugLog(
+      'Failed to fetch Mihomo base config, falling back to local config:',
+      error,
+    )
+    const info = await getClashInfo()
+
+    return {
+      mode: normalizeClashMode(info?.mode),
+      mixedPort: info?.mixed_port ?? 7897,
+      socksPort: info?.socks_port ?? 7898,
+      port: info?.port ?? 7899,
+    } as BaseConfig
+  }
+}
+
 // Get runtime config which controlled by verge
 export async function getRuntimeConfig() {
   return invoke<IConfigData | null>('get_runtime_config')
@@ -133,6 +166,34 @@ export async function patchClashMode(payload: string) {
 
 export async function syncTrayProxySelection() {
   return invoke<void>('sync_tray_proxy_selection')
+}
+
+const BUILTIN_PROXY_NAMES = new Set([
+  'DIRECT',
+  'REJECT',
+  'REJECT-DROP',
+  'PASS',
+  'PASS-RULE',
+  'COMPATIBLE',
+])
+
+const BUILTIN_PROXY_TYPES = new Set([
+  'direct',
+  'reject',
+  'reject-drop',
+  'rejectdrop',
+  'pass',
+  'passrule',
+  'compatible',
+])
+
+function isUserProxy(proxy?: IProxyItem) {
+  if (!proxy?.name || proxy.all?.length) return false
+
+  return (
+    !BUILTIN_PROXY_NAMES.has(proxy.name.toUpperCase()) &&
+    !BUILTIN_PROXY_TYPES.has(proxy.type?.toLowerCase() ?? '')
+  )
 }
 
 export async function calcuProxies(): Promise<{
@@ -209,11 +270,9 @@ export async function calcuProxies(): Promise<{
       .concat(globalGroups)
   }
 
-  const proxies = [direct, reject].concat(
-    Object.values(proxyRecord).filter(
-      (p) => !p?.all?.length && p?.name !== 'DIRECT' && p?.name !== 'REJECT',
-    ),
-  )
+  const proxies = [direct, reject]
+    .filter(Boolean)
+    .concat(Object.values(proxyRecord).filter(isUserProxy))
 
   const _global = {
     ...global,
