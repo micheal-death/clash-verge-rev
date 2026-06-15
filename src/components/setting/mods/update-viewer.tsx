@@ -14,6 +14,7 @@ import { useUpdate } from '@/hooks/use-update'
 import { portableFlag } from '@/pages/_layout'
 import { showNotice } from '@/services/notice-service'
 import { useSetUpdateState, useUpdateState } from '@/services/states'
+import { resolveRemoteVersion } from '@/services/update'
 import {
   CUSTOM_AUTOBUILD_RELEASE_URL,
   CUSTOM_REPOSITORY_URL,
@@ -42,6 +43,17 @@ const GITHUB_ALERT_PATTERN =
   /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][\t ]*\n?/i
 const GITHUB_ALERT_CLASS_PATTERN =
   /markdown-alert-(note|tip|important|warning|caution)/
+const FALLBACK_UPDATE_MESSAGE = 'New Version is available'
+
+const getRawString = (rawJson: unknown, key: string): string | null => {
+  if (!rawJson || typeof rawJson !== 'object') return null
+
+  const value = (rawJson as Record<string, unknown>)[key]
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
 
 const getAlertTypeFromClassName = (
   className: unknown,
@@ -123,6 +135,10 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
       ? `${CUSTOM_REPOSITORY_URL}/releases/tag/${encodeURIComponent(tagName.trim())}`
       : CUSTOM_AUTOBUILD_RELEASE_URL
   }, [updateInfo])
+  const displayVersion = useMemo(() => {
+    if (!updateInfo) return ''
+    return resolveRemoteVersion(updateInfo) ?? updateInfo.version ?? ''
+  }, [updateInfo])
 
   const [downloaded, setDownloaded] = useState(0)
   const [total, setTotal] = useState(0)
@@ -140,25 +156,26 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
   }))
 
   const markdownContent = useMemo(() => {
-    if (!updateInfo?.body) {
-      return 'New Version is available'
-    }
-    return updateInfo?.body
+    const body = updateInfo?.body?.trim()
+    if (body) return body
+
+    return (
+      getRawString(updateInfo?.rawJson, 'notes') ??
+      getRawString(updateInfo?.rawJson, 'body') ??
+      FALLBACK_UPDATE_MESSAGE
+    )
   }, [updateInfo])
 
   const breakChangeFlag = useMemo(() => {
-    if (!updateInfo?.body) {
-      return false
-    }
-    return updateInfo?.body.toLowerCase().includes('break change')
-  }, [updateInfo])
+    return markdownContent.toLowerCase().includes('break change')
+  }, [markdownContent])
 
   const onUpdate = useLockFn(async () => {
     if (portableFlag) {
       showNotice.error('settings.modals.update.messages.portableError')
       return
     }
-    if (!updateInfo?.body) return
+    if (!updateInfo) return
     if (breakChangeFlag) {
       showNotice.error('settings.modals.update.messages.breakChangeError')
       return
@@ -231,7 +248,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
             }}
           >
             {t('settings.modals.update.title', {
-              version: updateInfo?.version ?? '',
+              version: displayVersion,
             })}
           </Box>
           <Button
