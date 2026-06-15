@@ -429,7 +429,8 @@
       },
       "messages": {
         "portableError": "可攜式版不支援應用程式內更新，請手動下載替換",
-        "breakChangeError": "此版本為重大更新，不支援應用程式內更新，請解除安裝後手動下載安裝"
+        "breakChangeError": "此版本為重大更新，不支援應用程式內更新，請解除安裝後手動下載安裝",
+        "fallback": "有新版本可用"
       }
     },
     "sysproxy": {

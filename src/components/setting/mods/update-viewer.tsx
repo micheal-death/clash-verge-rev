@@ -43,7 +43,6 @@ const GITHUB_ALERT_PATTERN =
   /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][\t ]*\n?/i
 const GITHUB_ALERT_CLASS_PATTERN =
   /markdown-alert-(note|tip|important|warning|caution)/
-const FALLBACK_UPDATE_MESSAGE = 'New Version is available'
 
 const getRawString = (rawJson: unknown, key: string): string | null => {
   if (!rawJson || typeof rawJson !== 'object') return null
@@ -162,9 +161,9 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
     return (
       getRawString(updateInfo?.rawJson, 'notes') ??
       getRawString(updateInfo?.rawJson, 'body') ??
-      FALLBACK_UPDATE_MESSAGE
+      t('settings.modals.update.messages.fallback')
     )
-  }, [updateInfo])
+  }, [t, updateInfo])
 
   const breakChangeFlag = useMemo(() => {
     return markdownContent.toLowerCase().includes('break change')

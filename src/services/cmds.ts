@@ -108,10 +108,34 @@ function normalizeClashMode(mode?: string) {
     : 'rule'
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+function isBaseConfigDecodeError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase()
+
+  return (
+    message.includes('decoding response body') ||
+    message.includes('missing field') ||
+    message.includes('invalid type') ||
+    message.includes('unknown variant')
+  )
+}
+
 export async function getClashBaseConfig(): Promise<BaseConfig> {
   try {
     return await getBaseConfig()
   } catch (error) {
+    if (!isBaseConfigDecodeError(error)) throw error
+
     debugLog(
       'Failed to fetch Mihomo base config, falling back to local config:',
       error,
@@ -188,7 +212,7 @@ const BUILTIN_PROXY_TYPES = new Set([
 ])
 
 function isUserProxy(proxy?: IProxyItem) {
-  if (!proxy?.name || proxy.all?.length) return false
+  if (!proxy?.name || Array.isArray(proxy.all)) return false
 
   return (
     !BUILTIN_PROXY_NAMES.has(proxy.name.toUpperCase()) &&

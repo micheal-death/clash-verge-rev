@@ -114,7 +114,7 @@ async fn patch_mihomo_mode(normalized_mode: &str, api_mode: &str) -> Result<()> 
                 };
 
                 match verify_result {
-                    Ok(config) if config.mode.to_string() == normalized_mode => return Ok(()),
+                    Ok(config) if config.mode.to_string().eq_ignore_ascii_case(normalized_mode) => return Ok(()),
                     Ok(config) => {
                         let message = format!(
                             "mihomo accepted mode patch as {candidate}, but current mode is {}",
@@ -146,7 +146,7 @@ async fn patch_mihomo_mode(normalized_mode: &str, api_mode: &str) -> Result<()> 
     ))
 }
 
-/// Change Clash mode (rule/global/direct/script)
+/// Change Clash mode (rule/global/direct)
 pub async fn change_clash_mode(mode: String) -> Result<()> {
     let (normalized_mode, api_mode) = normalize_clash_mode(mode.as_str())?;
     let mut mapping = Mapping::new();
@@ -162,10 +162,13 @@ pub async fn change_clash_mode(mode: String) -> Result<()> {
 
     // 分离数据获取和异步调用
     let clash_data = clash.data_arc();
-    if clash_data.save_config().await.is_ok() {
-        handle::Handle::refresh_clash();
-        tray::Tray::global().update_menu_and_icon().await;
-    }
+    clash_data
+        .save_config()
+        .await
+        .map_err(|err| anyhow!("failed to persist clash mode change: {err}"))?;
+
+    handle::Handle::refresh_clash();
+    tray::Tray::global().update_menu_and_icon().await;
 
     let is_auto_close_connection = Config::verge().await.data_arc().auto_close_connection.unwrap_or(false);
     if is_auto_close_connection {
