@@ -90,7 +90,6 @@ fn normalize_clash_mode(mode: &str) -> Result<(&'static str, &'static str)> {
 }
 
 async fn patch_mihomo_mode(normalized_mode: &str, api_mode: &str) -> Result<()> {
-    let mihomo = handle::Handle::mihomo().await;
     let candidates = [api_mode, normalized_mode];
     let mut last_error: Option<std::string::String> = None;
 
@@ -98,26 +97,41 @@ async fn patch_mihomo_mode(normalized_mode: &str, api_mode: &str) -> Result<()> 
         let json_value = serde_json::json!({
             "mode": candidate
         });
+        let patch_result = {
+            let mihomo = handle::Handle::mihomo().await;
+            let result = mihomo.patch_base_config(&json_value).await;
+            drop(mihomo);
+            result
+        };
 
-        match mihomo.patch_base_config(&json_value).await {
-            Ok(_) => match mihomo.get_base_config().await {
-                Ok(config) if config.mode.to_string() == normalized_mode => return Ok(()),
-                Ok(config) => {
-                    let message = format!(
-                        "mihomo accepted mode patch as {candidate}, but current mode is {}",
-                        config.mode
-                    );
-                    logging!(warn, Type::Core, "{message}");
-                    last_error = Some(message);
+        match patch_result {
+            Ok(_) => {
+                let verify_result = {
+                    let mihomo = handle::Handle::mihomo().await;
+                    let result = mihomo.get_base_config().await;
+                    drop(mihomo);
+                    result
+                };
+
+                match verify_result {
+                    Ok(config) if config.mode.to_string() == normalized_mode => return Ok(()),
+                    Ok(config) => {
+                        let message = format!(
+                            "mihomo accepted mode patch as {candidate}, but current mode is {}",
+                            config.mode
+                        );
+                        logging!(warn, Type::Core, "{message}");
+                        last_error = Some(message);
+                    }
+                    Err(err) => {
+                        let message = format!("failed to verify clash mode after patching {candidate}: {err}");
+                        logging!(debug, Type::Core, "{message}");
+                        // Newer Mihomo may add fields that the typed plugin model cannot decode.
+                        // A successful PATCH is enough to keep the UI and local config in sync.
+                        return Ok(());
+                    }
                 }
-                Err(err) => {
-                    let message = format!("failed to verify clash mode after patching {candidate}: {err}");
-                    logging!(debug, Type::Core, "{message}");
-                    // Newer Mihomo may add fields that the typed plugin model cannot decode.
-                    // A successful PATCH is enough to keep the UI and local config in sync.
-                    return Ok(());
-                }
-            },
+            }
             Err(err) => {
                 let message = format!("failed to patch clash mode as {candidate}: {err}");
                 logging!(warn, Type::Core, "{message}");
