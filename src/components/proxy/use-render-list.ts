@@ -1,10 +1,14 @@
-import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppRefreshers, useProxiesData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import {
+  createStableIdentityOrderState,
+  stabilizeIdentityOrder,
+} from '@/utils/stable-identity-order'
 
 import { filterSort } from './use-filter-sort'
 import {
@@ -62,6 +66,8 @@ export interface IRenderItem {
   col?: number
   proxyCol?: IProxyItem[]
   headState?: HeadState
+  groupIdentity?: string
+  proxyIdentity?: string
   // 新增支持图标和其他元数据
   icon?: string
   provider?: string
@@ -75,29 +81,6 @@ type GroupCache = {
   col: number
   latencyTimeout: number | undefined
   items: IRenderItem[]
-}
-
-const stabilizeGroups = <T extends { name: string }>(
-  groups: T[],
-  orderRef: MutableRefObject<string[]>,
-) => {
-  const currentNames = new Set(groups.map((group) => group.name))
-  const nextOrder = orderRef.current.filter((name) => currentNames.has(name))
-
-  for (const group of groups) {
-    if (!nextOrder.includes(group.name)) {
-      nextOrder.push(group.name)
-    }
-  }
-
-  orderRef.current = nextOrder
-  const orderMap = new Map(nextOrder.map((name, index) => [name, index]))
-
-  return [...groups].sort(
-    (prev, next) =>
-      (orderMap.get(prev.name) ?? Number.MAX_SAFE_INTEGER) -
-      (orderMap.get(next.name) ?? Number.MAX_SAFE_INTEGER),
-  )
 }
 
 // 优化列布局计算
@@ -129,6 +112,8 @@ export const useRenderList = (
   mode: string,
   isChainMode?: boolean,
   selectedGroup?: string | null,
+  proxyIdentityMap: Record<string, string> = {},
+  groupIdentityMap: Record<string, string> = {},
 ) => {
   // 使用全局数据提供者
   const { proxies: proxiesData } = useProxiesData()
@@ -147,6 +132,16 @@ export const useRenderList = (
     [width, verge?.proxy_layout_column],
   )
   const chainCol = isChainMode ? 1 : col
+  const getProxyIdentityKey = useCallback(
+    (proxy: { name: string }) =>
+      proxyIdentityMap[proxy.name] ?? `runtime-proxy:${proxy.name}`,
+    [proxyIdentityMap],
+  )
+  const getGroupIdentityKey = useCallback(
+    (group: { name: string }) =>
+      groupIdentityMap[group.name] ?? `runtime-group:${group.name}`,
+    [groupIdentityMap],
+  )
 
   // 确保代理数据加载
   useEffect(() => {
@@ -204,7 +199,7 @@ export const useRenderList = (
   }, [isChainMode, runtimeConfig, verge?.default_latency_timeout, refreshProxy])
 
   const groupCacheRef = useRef<Map<string, GroupCache>>(new Map())
-  const groupOrderRef = useRef<string[]>([])
+  const groupOrderRef = useRef(createStableIdentityOrderState())
   const prevListRef = useRef<IRenderItem[]>([])
 
   // 处理渲染列表
@@ -222,6 +217,7 @@ export const useRenderList = (
       if (selectedGroup) {
         const targetGroup = allGroups.find((g: any) => g.name === selectedGroup)
         if (targetGroup) {
+          const groupIdentity = getGroupIdentityKey(targetGroup)
           const proxies = filterSort(
             targetGroup.all,
             targetGroup.name,
@@ -234,9 +230,10 @@ export const useRenderList = (
             return groupProxies(proxies, chainCol).map(
               (proxyCol, colIndex) => ({
                 type: 4,
-                key: `chain-col-${selectedGroup}-${colIndex}`,
+                key: `chain-col-${groupIdentity}-${colIndex}`,
                 group: targetGroup,
                 headState: DEFAULT_STATE,
+                groupIdentity,
                 col: chainCol,
                 proxyCol,
                 provider: proxyCol[0]?.provider,
@@ -245,10 +242,12 @@ export const useRenderList = (
           } else {
             return proxies.map((proxy) => ({
               type: 2,
-              key: `chain-${selectedGroup}-${proxy!.name}`,
+              key: `chain-${groupIdentity}-${getProxyIdentityKey(proxy!)}`,
               group: targetGroup,
               proxy,
               headState: DEFAULT_STATE,
+              groupIdentity,
+              proxyIdentity: getProxyIdentityKey(proxy!),
               provider: proxy.provider,
             }))
           }
@@ -259,6 +258,7 @@ export const useRenderList = (
       // 如果没有选择特定组，显示第一个组的节点（如果有组的话）
       if (allGroups.length > 0) {
         const firstGroup = allGroups[0]
+        const groupIdentity = getGroupIdentityKey(firstGroup)
         const proxies = filterSort(
           firstGroup.all,
           firstGroup.name,
@@ -270,9 +270,10 @@ export const useRenderList = (
         if (chainCol > 1) {
           return groupProxies(proxies, chainCol).map((proxyCol, colIndex) => ({
             type: 4,
-            key: `chain-col-first-${colIndex}`,
+            key: `chain-col-${groupIdentity}-${colIndex}`,
             group: firstGroup,
             headState: DEFAULT_STATE,
+            groupIdentity,
             col: chainCol,
             proxyCol,
             provider: proxyCol[0]?.provider,
@@ -280,10 +281,12 @@ export const useRenderList = (
         } else {
           return proxies.map((proxy) => ({
             type: 2,
-            key: `chain-first-${proxy!.name}`,
+            key: `chain-${groupIdentity}-${getProxyIdentityKey(proxy!)}`,
             group: firstGroup,
             proxy,
             headState: DEFAULT_STATE,
+            groupIdentity,
+            proxyIdentity: getProxyIdentityKey(proxy!),
             provider: proxy.provider,
           }))
         }
@@ -320,14 +323,16 @@ export const useRenderList = (
         now: '',
         all: proxiesWithDelay,
       }
+      const groupIdentity = 'runtime-group:all-proxies'
 
       if (chainCol > 1) {
         return groupProxies(proxiesWithDelay, chainCol).map(
           (proxyCol, colIndex) => ({
             type: 4,
-            key: `chain-col-all-${colIndex}`,
+            key: `chain-col-${groupIdentity}-${colIndex}`,
             group: virtualGroup,
             headState: DEFAULT_STATE,
+            groupIdentity,
             col: chainCol,
             proxyCol,
             provider: proxyCol[0]?.provider,
@@ -336,10 +341,12 @@ export const useRenderList = (
       } else {
         return proxiesWithDelay.map((proxy) => ({
           type: 2,
-          key: `chain-all-${proxy.name}`,
+          key: `chain-${groupIdentity}-${getProxyIdentityKey(proxy)}`,
           group: virtualGroup,
           proxy,
           headState: DEFAULT_STATE,
+          groupIdentity,
+          proxyIdentity: getProxyIdentityKey(proxy),
           provider: proxy.provider,
         }))
       }
@@ -378,15 +385,17 @@ export const useRenderList = (
         now: '',
         all: proxiesWithDelay,
       }
+      const groupIdentity = 'runtime-group:all-proxies'
 
       // 返回节点列表（不显示组头）
       if (chainCol > 1) {
         return groupProxies(proxiesWithDelay, chainCol).map(
           (proxyCol, colIndex) => ({
             type: 4,
-            key: `chain-col-${colIndex}`,
+            key: `chain-col-${groupIdentity}-${colIndex}`,
             group: virtualGroup,
             headState: DEFAULT_STATE,
+            groupIdentity,
             col: chainCol,
             proxyCol,
             provider: proxyCol[0]?.provider,
@@ -395,10 +404,12 @@ export const useRenderList = (
       } else {
         return proxiesWithDelay.map((proxy) => ({
           type: 2,
-          key: `chain-${proxy.name}`,
+          key: `chain-${groupIdentity}-${getProxyIdentityKey(proxy)}`,
           group: virtualGroup,
           proxy,
           headState: DEFAULT_STATE,
+          groupIdentity,
+          proxyIdentity: getProxyIdentityKey(proxy),
           provider: proxy.provider,
         }))
       }
@@ -411,14 +422,20 @@ export const useRenderList = (
         ? proxiesData.groups
         : [proxiesData.global!]
     ) as ProxyGroup[]
-    const renderGroups = stabilizeGroups(sourceGroups, groupOrderRef)
+    const renderGroups = stabilizeIdentityOrder(
+      sourceGroups,
+      groupOrderRef.current,
+      getGroupIdentityKey,
+    )
 
     const cache = groupCacheRef.current
     let anyChanged = false
 
     const retList = renderGroups.flatMap((group: ProxyGroup) => {
-      const headState = headStates[group.name] || DEFAULT_STATE
-      const cached = cache.get(group.name)
+      const groupIdentity = getGroupIdentityKey(group)
+      const headState =
+        headStates[groupIdentity] || headStates[group.name] || DEFAULT_STATE
+      const cached = cache.get(groupIdentity)
 
       if (
         cached &&
@@ -435,9 +452,10 @@ export const useRenderList = (
       const ret: IRenderItem[] = [
         {
           type: 0,
-          key: group.name,
+          key: groupIdentity,
           group,
           headState,
+          groupIdentity,
           icon: group.icon,
           testUrl: group.testUrl,
         },
@@ -459,25 +477,28 @@ export const useRenderList = (
 
         ret.push({
           type: 1,
-          key: `head-${group.name}`,
+          key: `head-${groupIdentity}`,
           group,
           headState,
+          groupIdentity,
         })
 
         if (!proxies.length) {
           ret.push({
             type: 3,
-            key: `empty-${group.name}`,
+            key: `empty-${groupIdentity}`,
             group,
             headState,
+            groupIdentity,
           })
         } else if (col > 1) {
           ret.push(
             ...groupProxies(proxies, col).map((proxyCol, colIndex) => ({
               type: 4 as const,
-              key: `col-${group.name}-${proxyCol[0].name}-${colIndex}`,
+              key: `col-${groupIdentity}-${getProxyIdentityKey(proxyCol[0])}-${colIndex}`,
               group,
               headState,
+              groupIdentity,
               col,
               proxyCol,
               provider: proxyCol[0].provider,
@@ -487,17 +508,19 @@ export const useRenderList = (
           ret.push(
             ...proxies.map((proxy) => ({
               type: 2 as const,
-              key: `${group.name}-${proxy!.name}`,
+              key: `${groupIdentity}-${getProxyIdentityKey(proxy!)}`,
               group,
               proxy,
               headState,
+              groupIdentity,
+              proxyIdentity: getProxyIdentityKey(proxy!),
               provider: proxy.provider,
             })),
           )
         }
       }
 
-      cache.set(group.name, {
+      cache.set(groupIdentity, {
         now: group.now,
         all: group.all,
         headState,
@@ -527,6 +550,8 @@ export const useRenderList = (
     runtimeConfig,
     selectedGroup,
     latencyTimeout,
+    getGroupIdentityKey,
+    getProxyIdentityKey,
   ])
 
   return {

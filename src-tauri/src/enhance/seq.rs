@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Sequence, Value};
 use std::collections::HashSet;
 
+const POLICY_ID_KEY: &str = "x-verge-id";
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SeqMap {
     pub prepend: Sequence,
@@ -95,6 +97,19 @@ fn normalize_rule_sequence(sequence: Sequence) -> Sequence {
     sequence.into_iter().filter_map(rule_item_to_value).collect()
 }
 
+fn strip_policy_metadata_from_sequence(sequence: Sequence) -> Sequence {
+    sequence
+        .into_iter()
+        .map(|item| match item {
+            Value::Mapping(mut map) => {
+                map.remove(POLICY_ID_KEY);
+                Value::Mapping(map)
+            }
+            _ => item,
+        })
+        .collect()
+}
+
 pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
     let SeqMap {
         mut prepend,
@@ -105,6 +120,10 @@ pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
     if field == "rules" {
         prepend = normalize_rule_sequence(prepend);
         append = normalize_rule_sequence(append);
+    }
+    if field == "proxies" || field == "proxy-groups" {
+        prepend = strip_policy_metadata_from_sequence(prepend);
+        append = strip_policy_metadata_from_sequence(append);
     }
 
     let added_proxy_names = if field == "proxies" {
@@ -502,5 +521,73 @@ rules:
                 "MATCH,GLOBAL",
             ],
         );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
+    fn test_policy_metadata_is_stripped_from_runtime_sequences() {
+        let config_str = r"
+proxies: []
+proxy-groups: []
+";
+        let mut config: Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test config YAML");
+        let proxies: Sequence = serde_yaml_ng::from_str(
+            r"
+- name: manual-proxy
+  type: ss
+  server: 127.0.0.1
+  port: 8388
+  cipher: aes-128-gcm
+  password: test
+  x-verge-id: proxy-id
+",
+        )
+        .expect("Failed to parse proxy sequence");
+        let groups: Sequence = serde_yaml_ng::from_str(
+            r"
+- name: manual-group
+  type: select
+  proxies:
+    - manual-proxy
+  x-verge-id: group-id
+",
+        )
+        .expect("Failed to parse group sequence");
+
+        config = use_seq(
+            SeqMap {
+                prepend: proxies,
+                append: Sequence::new(),
+                delete: vec![],
+            },
+            config,
+            "proxies",
+        );
+        config = use_seq(
+            SeqMap {
+                prepend: groups,
+                append: Sequence::new(),
+                delete: vec![],
+            },
+            config,
+            "proxy-groups",
+        );
+
+        let proxies = config
+            .get("proxies")
+            .expect("proxies field should exist")
+            .as_sequence()
+            .expect("proxies should be a sequence");
+        let proxy = proxies[0].as_mapping().expect("proxy should be a mapping");
+        assert!(!proxy.contains_key("x-verge-id"));
+
+        let groups = config
+            .get("proxy-groups")
+            .expect("proxy-groups field should exist")
+            .as_sequence()
+            .expect("proxy-groups should be a sequence");
+        let group = groups[0].as_mapping().expect("group should be a mapping");
+        assert!(!group.contains_key("x-verge-id"));
     }
 }

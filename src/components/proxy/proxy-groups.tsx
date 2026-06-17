@@ -17,7 +17,6 @@ import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 import { useLockFn } from 'ahooks'
 import {
   type Key,
-  type MutableRefObject,
   type MouseEvent,
   type ReactNode,
   type RefObject,
@@ -39,6 +38,10 @@ import { useProxiesData } from '@/providers/app-data-context'
 import { calcuProxies, updateProxyChainConfigInRuntime } from '@/services/cmds'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import {
+  createStableIdentityOrderState,
+  stabilizeIdentityOrder,
+} from '@/utils/stable-identity-order'
 
 import { ScrollTopButton } from '../layout/scroll-top-button'
 
@@ -63,6 +66,8 @@ interface Props {
   isChainMode?: boolean
   chainConfigData?: string | null
   editableProxyNames?: string[]
+  proxyIdentityMap?: Record<string, string>
+  groupIdentityMap?: Record<string, string>
   onEditProxy?: (name: string) => void
   onProxyContextMenu?: (event: MouseEvent<HTMLElement>, name: string) => void
   onGroupContextMenu?: (
@@ -74,6 +79,7 @@ interface Props {
 }
 
 const EMPTY_EDITABLE_PROXY_NAMES: string[] = []
+const EMPTY_IDENTITY_MAP: Record<string, string> = {}
 const BUILTIN_PROXY_NAMES = new Set([
   'DIRECT',
   'REJECT',
@@ -101,37 +107,21 @@ function isProxyAsset(proxy: IProxyItem | undefined) {
   )
 }
 
-function stabilizeNamedItems<T extends { name: string }>(
+function useStableIdentityItems<T extends { name: string }>(
   items: T[],
-  orderRef: MutableRefObject<string[]>,
+  getIdentityKey: (item: T) => string,
 ) {
-  const currentNames = new Set(items.map((item) => item.name))
-  const nextOrder = orderRef.current.filter((name) => currentNames.has(name))
-
-  for (const item of items) {
-    if (!nextOrder.includes(item.name)) {
-      nextOrder.push(item.name)
-    }
-  }
-
-  orderRef.current = nextOrder
-  const orderMap = new Map(nextOrder.map((name, index) => [name, index]))
-
-  return [...items].sort(
-    (prev, next) =>
-      (orderMap.get(prev.name) ?? Number.MAX_SAFE_INTEGER) -
-      (orderMap.get(next.name) ?? Number.MAX_SAFE_INTEGER),
+  const orderRef = useRef(createStableIdentityOrderState())
+  return useMemo(
+    () => stabilizeIdentityOrder(items, orderRef.current, getIdentityKey),
+    [getIdentityKey, items],
   )
-}
-
-function useStableNamedItems<T extends { name: string }>(items: T[]) {
-  const orderRef = useRef<string[]>([])
-  return useMemo(() => stabilizeNamedItems(items, orderRef), [items])
 }
 
 interface ProxyChainItem {
   id: string
   name: string
+  identityKey?: string
   type?: string
   delay?: number
 }
@@ -144,6 +134,8 @@ export const ProxyGroups = (props: Props) => {
     isChainMode = false,
     chainConfigData,
     editableProxyNames = EMPTY_EDITABLE_PROXY_NAMES,
+    proxyIdentityMap = EMPTY_IDENTITY_MAP,
+    groupIdentityMap = EMPTY_IDENTITY_MAP,
     onEditProxy,
     onProxyContextMenu,
     onGroupContextMenu,
@@ -174,6 +166,7 @@ export const ProxyGroups = (props: Props) => {
     return []
   })
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const selectedGroupIdentityRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (proxyChain.length > 0) {
@@ -190,8 +183,19 @@ export const ProxyGroups = (props: Props) => {
 
   const { verge } = useVerge()
   const { proxies: proxiesData } = useProxiesData()
-  const stableGroups = useStableNamedItems<IProxyGroupItem>(
+  const getProxyIdentityKey = useCallback(
+    (proxy: { name: string }) =>
+      proxyIdentityMap[proxy.name] ?? `runtime-proxy:${proxy.name}`,
+    [proxyIdentityMap],
+  )
+  const getGroupIdentityKey = useCallback(
+    (group: { name: string }) =>
+      groupIdentityMap[group.name] ?? `runtime-group:${group.name}`,
+    [groupIdentityMap],
+  )
+  const stableGroups = useStableIdentityItems<IProxyGroupItem>(
     ((proxiesData?.groups ?? []) as IProxyGroupItem[]).filter(Boolean),
+    getGroupIdentityKey,
   )
   const availableGroups = useMemo(() => {
     // 在链式代理模式下，仅显示支持选择节点的 Selector 代理组
@@ -207,10 +211,14 @@ export const ProxyGroups = (props: Props) => {
     return null
   }, [availableGroups, isChainMode, mode])
 
-  const activeSelectedGroup = useMemo(
-    () => selectedGroup ?? defaultRuleGroup,
-    [selectedGroup, defaultRuleGroup],
-  )
+  const selectedGroupFromIdentity = selectedGroupIdentityRef.current
+    ? availableGroups.find(
+        (group) =>
+          getGroupIdentityKey(group) === selectedGroupIdentityRef.current,
+      )?.name
+    : undefined
+  const activeSelectedGroup =
+    selectedGroupFromIdentity ?? selectedGroup ?? defaultRuleGroup
   const editableProxyNameSet = useMemo(
     () => new Set(editableProxyNames),
     [editableProxyNames],
@@ -219,11 +227,15 @@ export const ProxyGroups = (props: Props) => {
     () => ((proxiesData?.proxies ?? []) as IProxyItem[]).filter(isProxyAsset),
     [proxiesData?.proxies],
   )
-  const proxyAssets = useStableNamedItems<IProxyItem>(rawProxyAssets)
-  const policyGroups = useStableNamedItems<IProxyGroupItem>(
+  const proxyAssets = useStableIdentityItems<IProxyItem>(
+    rawProxyAssets,
+    getProxyIdentityKey,
+  )
+  const policyGroups = useStableIdentityItems<IProxyGroupItem>(
     ((proxiesData?.groups ?? []) as IProxyGroupItem[]).filter(
       (group) => !group.hidden,
     ),
+    getGroupIdentityKey,
   )
   const proxyAssetGroup = useMemo<IProxyGroupItem>(
     () => ({
@@ -242,10 +254,65 @@ export const ProxyGroups = (props: Props) => {
     [proxiesData?.global, proxyAssets],
   )
 
+  useEffect(() => {
+    if (!proxiesData?.proxies?.length) return
+
+    const identityToProxy = new Map(
+      ((proxiesData.proxies ?? []) as IProxyItem[]).map((proxy) => [
+        getProxyIdentityKey(proxy),
+        proxy,
+      ]),
+    )
+    let exitNode = localStorage.getItem('proxy-chain-exit-node')
+
+    // eslint-disable-next-line @eslint-react/set-state-in-effect
+    setProxyChain((prev) => {
+      let changed = false
+      const next = prev.map((item) => {
+        const identityKey =
+          item.identityKey ??
+          (item.name ? proxyIdentityMap[item.name] : undefined)
+        if (!identityKey) return item
+
+        const proxy = identityToProxy.get(identityKey)
+        if (!proxy) {
+          if (item.identityKey) return item
+          changed = true
+          return { ...item, identityKey }
+        }
+
+        if (exitNode === item.name && proxy.name !== item.name) {
+          exitNode = proxy.name
+          localStorage.setItem('proxy-chain-exit-node', proxy.name)
+        }
+
+        if (
+          item.identityKey === identityKey &&
+          item.name === proxy.name &&
+          item.type === proxy.type
+        ) {
+          return item
+        }
+
+        changed = true
+        return {
+          ...item,
+          identityKey,
+          name: proxy.name,
+          type: proxy.type,
+        }
+      })
+
+      return changed ? next : prev
+    })
+  }, [getProxyIdentityKey, proxiesData?.proxies, proxyIdentityMap])
+
   const { renderList, onProxies, onHeadState } = useRenderList(
     mode,
     isChainMode,
     activeSelectedGroup,
+    proxyIdentityMap,
+    groupIdentityMap,
   )
 
   const getGroupHeadState = useCallback(
@@ -256,6 +323,17 @@ export const ProxyGroups = (props: Props) => {
       return headItem?.headState
     },
     [renderList],
+  )
+  const getGroupStateKeyByName = useCallback(
+    (groupName: string) => {
+      const group = [
+        proxiesData?.global,
+        ...((proxiesData?.groups ?? []) as IProxyGroupItem[]),
+      ].find((item): item is IProxyGroupItem => item?.name === groupName)
+
+      return group ? getGroupIdentityKey(group) : `runtime-group:${groupName}`
+    },
+    [getGroupIdentityKey, proxiesData?.global, proxiesData?.groups],
   )
 
   // 统代理选择
@@ -443,6 +521,8 @@ export const ProxyGroups = (props: Props) => {
 
   const handleGroupSelect = (groupName: string) => {
     setSelectedGroup(groupName)
+    const group = availableGroups.find((item) => item.name === groupName)
+    selectedGroupIdentityRef.current = group ? getGroupIdentityKey(group) : null
     handleGroupMenuClose()
 
     if (isChainMode && mode === 'rule') {
@@ -478,6 +558,7 @@ export const ProxyGroups = (props: Props) => {
           const chainItem: ProxyChainItem = {
             id: `${proxy.name}_${Date.now()}`,
             name: proxy.name,
+            identityKey: getProxyIdentityKey(proxy),
             type: proxy.type,
             delay: delay,
           }
@@ -491,7 +572,7 @@ export const ProxyGroups = (props: Props) => {
 
       handleProxyGroupChange(group, proxy)
     },
-    [handleProxyGroupChange, isChainMode, t],
+    [getProxyIdentityKey, handleProxyGroupChange, isChainMode, t],
   )
 
   // 测全部延迟
@@ -544,7 +625,9 @@ export const ProxyGroups = (props: Props) => {
       } finally {
         const headState = getGroupHeadState(groupName)
         if (headState?.sortType === 1) {
-          onHeadState(groupName, { sortType: headState.sortType })
+          onHeadState(getGroupStateKeyByName(groupName), {
+            sortType: headState.sortType,
+          })
         }
         onProxies()
       }
@@ -695,6 +778,7 @@ export const ProxyGroups = (props: Props) => {
           groups={availableGroups}
           selectedGroup={activeSelectedGroup}
           emptyText="暂无可用代理组"
+          getGroupIdentityKey={getGroupIdentityKey}
           onClose={handleGroupMenuClose}
           onSelect={handleGroupSelect}
         />
@@ -710,6 +794,8 @@ export const ProxyGroups = (props: Props) => {
           proxyAssets={proxyAssets}
           proxyAssetGroup={proxyAssetGroup}
           policyGroups={policyGroups}
+          getProxyIdentityKey={getProxyIdentityKey}
+          getGroupIdentityKey={getGroupIdentityKey}
           editableProxyNames={editableProxyNameSet}
           onEditProxy={onEditProxy}
           onProxyContextMenu={onProxyContextMenu}
@@ -860,6 +946,7 @@ interface GroupSelectMenuProps {
   groups: ProxyGroupOption[]
   selectedGroup: string | null
   emptyText: string
+  getGroupIdentityKey: (group: { name: string }) => string
   onClose: () => void
   onSelect: (groupName: string) => void
 }
@@ -869,6 +956,7 @@ function GroupSelectMenu({
   groups,
   selectedGroup,
   emptyText,
+  getGroupIdentityKey,
   onClose,
   onSelect,
 }: GroupSelectMenuProps) {
@@ -888,7 +976,7 @@ function GroupSelectMenu({
     >
       {groups.map((group) => (
         <MenuItem
-          key={group.name}
+          key={getGroupIdentityKey(group)}
           onClick={() => onSelect(group.name)}
           selected={selectedGroup === group.name}
           sx={{ fontSize: '14px', py: 1 }}
@@ -926,6 +1014,8 @@ interface PolicyAssetViewProps {
   proxyAssets: IProxyItem[]
   proxyAssetGroup: IProxyGroupItem
   policyGroups: IProxyGroupItem[]
+  getProxyIdentityKey: (proxy: { name: string }) => string
+  getGroupIdentityKey: (group: { name: string }) => string
   editableProxyNames: Set<string>
   onEditProxy?: (name: string) => void
   onProxyContextMenu?: (event: MouseEvent<HTMLElement>, name: string) => void
@@ -943,6 +1033,8 @@ function PolicyAssetView({
   proxyAssets,
   proxyAssetGroup,
   policyGroups,
+  getProxyIdentityKey,
+  getGroupIdentityKey,
   editableProxyNames,
   onEditProxy,
   onProxyContextMenu,
@@ -985,10 +1077,10 @@ function PolicyAssetView({
 
           return (
             <ProxyItemMini
-              key={proxy.name}
+              key={getProxyIdentityKey(proxy)}
               group={proxyAssetGroup}
               proxy={proxy}
-              selected={proxyAssetGroup.now === proxy.name}
+              selected={false}
               large
               onEdit={canEdit ? onEditProxy : undefined}
               onContextMenu={canEdit ? onProxyContextMenu : undefined}
@@ -1012,7 +1104,7 @@ function PolicyAssetView({
       <PolicyGrid>
         {policyGroups.map((group) => (
           <PolicyGroupCard
-            key={group.name}
+            key={getGroupIdentityKey(group)}
             group={group}
             onContextMenu={onGroupContextMenu}
           />

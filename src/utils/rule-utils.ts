@@ -8,6 +8,11 @@ import type {
   EffectiveRuleRow,
 } from '@/types/effective-profile'
 
+import type {
+  ManualGroupDocument,
+  ManualProxyDocument,
+} from './manual-policy-docs'
+
 export type RuleSource = 'prepend' | 'runtime' | 'append'
 export type ManualRuleSource = Exclude<RuleSource, 'runtime'>
 export type RuleDialogKind = 'standard' | 'logical' | 'ruleset'
@@ -20,18 +25,6 @@ export interface ManualRuleItem {
 export interface ManualRulesDocument {
   prepend: ManualRuleItem[]
   append: ManualRuleItem[]
-  delete: string[]
-}
-
-export interface ManualProxyDocument {
-  prepend: IProxyConfig[]
-  append: IProxyConfig[]
-  delete: string[]
-}
-
-export interface ManualGroupDocument {
-  prepend: IProxyGroupConfig[]
-  append: IProxyGroupConfig[]
   delete: string[]
 }
 
@@ -243,9 +236,6 @@ const getPolicyItemName = (item: unknown) => {
   return typeof name === 'string' ? name.trim() : ''
 }
 
-const isPlainObject = (item: unknown): item is Record<string, unknown> =>
-  !!item && typeof item === 'object' && !Array.isArray(item)
-
 export const normalizePolicyDeleteNames = (value: unknown): string[] =>
   Array.isArray(value)
     ? Array.from(
@@ -312,44 +302,6 @@ export const normalizeManualRules = (data: string): ManualRulesDocument => {
     prepend: toManualRuleItems(obj?.prepend),
     append: toManualRuleItems(obj?.append),
     delete: toStringArray(obj?.delete),
-  }
-}
-
-const toProxyItems = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter(
-        (item): item is IProxyConfig =>
-          isPlainObject(item) && getPolicyItemName(item).length > 0,
-      )
-    : []
-
-const toGroupItems = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter(
-        (item): item is IProxyGroupConfig =>
-          isPlainObject(item) && getPolicyItemName(item).length > 0,
-      )
-    : []
-
-export const normalizeManualProxyDocument = (
-  data: string,
-): ManualProxyDocument => {
-  const obj = yaml.load(data) as Partial<ManualProxyDocument> | null
-  return {
-    prepend: toProxyItems(obj?.prepend),
-    append: toProxyItems(obj?.append),
-    delete: normalizePolicyDeleteNames(obj?.delete),
-  }
-}
-
-export const normalizeManualGroupDocument = (
-  data: string,
-): ManualGroupDocument => {
-  const obj = yaml.load(data) as Partial<ManualGroupDocument> | null
-  return {
-    prepend: toGroupItems(obj?.prepend),
-    append: toGroupItems(obj?.append),
-    delete: normalizePolicyDeleteNames(obj?.delete),
   }
 }
 
@@ -420,6 +372,20 @@ export const buildRuleRaw = (form: RuleForm) =>
     policy: form.policy,
     noResolve: form.noResolve,
   })
+
+export const renameRulePolicyRaw = (
+  raw: string,
+  oldName: string,
+  newName: string,
+) => {
+  const parsed = parseRuleRaw(raw)
+  if (!parsed.type || parsed.policy !== oldName) return raw
+
+  return buildParsedRuleRaw({
+    ...parsed,
+    policy: newName,
+  })
+}
 
 export const runtimeRuleToRaw = (rule: {
   type: string
@@ -997,6 +963,50 @@ export const addRuleOverlayReplacement = (
   addRuleDelete(document, originalRaw)
   addRuleDelete(document, replacementRaw)
   document.prepend.unshift(createManualRuleItem(replacementRaw))
+}
+
+export const renamePolicyInManualRules = (
+  document: ManualRulesDocument,
+  oldName: string,
+  newName: string,
+  runtimeRules: RuntimeRuleInput[] = [],
+): ManualRulesDocument => {
+  if (oldName === newName) return document
+
+  const manualOriginalSignatures = new Set(
+    [...document.prepend, ...document.append].map((item) =>
+      getRawRuleIdentitySignature(item.raw),
+    ),
+  )
+  const next: ManualRulesDocument = {
+    prepend: document.prepend.map((item) => ({
+      ...item,
+      raw: renameRulePolicyRaw(item.raw, oldName, newName),
+    })),
+    append: document.append.map((item) => ({
+      ...item,
+      raw: renameRulePolicyRaw(item.raw, oldName, newName),
+    })),
+    delete: [...document.delete],
+  }
+
+  runtimeRules.forEach((rule) => {
+    if (rule.proxy !== oldName) return
+
+    const originalRaw = runtimeRuleToRaw(rule)
+    if (
+      manualOriginalSignatures.has(getRawRuleIdentitySignature(originalRaw))
+    ) {
+      return
+    }
+
+    const replacementRaw = renameRulePolicyRaw(originalRaw, oldName, newName)
+    if (replacementRaw !== originalRaw) {
+      addRuleOverlayReplacement(next, originalRaw, replacementRaw)
+    }
+  })
+
+  return sanitizeManualRules(next)
 }
 
 export const revealRuntimeRuleIfUnshadowed = (

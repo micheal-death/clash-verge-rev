@@ -11,8 +11,26 @@ use crate::{
     utils::dirs,
 };
 use clash_verge_logging::{Type, logging};
+use serde::Deserialize;
 use smartstring::alias::String;
 use tokio::fs;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileOverlayFilePatch {
+    index: String,
+    file_data: String,
+}
+
+struct ProfileOverlayFileSaveContext {
+    file_data: String,
+    original_content: String,
+    file_path: std::path::PathBuf,
+    file_path_str: String,
+    is_merge_file: bool,
+    is_script_file: bool,
+    affects_runtime: bool,
+}
 
 /// 保存profiles的配置
 #[tauri::command]
@@ -83,8 +101,163 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
     Ok(changes_applied)
 }
 
+#[tauri::command]
+pub async fn save_profile_overlay_files(files: Vec<ProfileOverlayFilePatch>) -> CmdResult<ValidationOutcome> {
+    if files.is_empty() {
+        return Ok(ValidationOutcome::Valid);
+    }
+
+    let mut contexts = Vec::with_capacity(files.len());
+    for file in files {
+        contexts.push(prepare_profile_overlay_file_save(file.index, file.file_data).await?);
+    }
+
+    for context in &contexts {
+        fs::write(&context.file_path, &context.file_data)
+            .await
+            .stringify_err()?;
+    }
+
+    for context in &contexts {
+        logging!(
+            info,
+            Type::Config,
+            "[cmd配置save] 开始批量文件验证: {}",
+            context.file_path_str
+        );
+
+        match CoreConfigValidator::validate_config_file_outcome(&context.file_path_str, Some(context.is_merge_file))
+            .await
+        {
+            Ok(outcome) if outcome.is_valid() => {
+                logging!(
+                    info,
+                    Type::Config,
+                    "[cmd配置save] 批量文件验证通过: {}",
+                    context.file_path_str
+                );
+            }
+            Ok(outcome) => {
+                logging!(warn, Type::Config, "[cmd配置save] 批量文件验证失败: {}", outcome);
+                restore_profile_file_contexts(&contexts).await?;
+                handle_validation_notice(
+                    &outcome,
+                    validation_notice_target(context),
+                    validation_file_type(context),
+                );
+                return Ok(outcome);
+            }
+            Err(err) => {
+                logging!(error, Type::Config, "[cmd配置save] 批量验证过程发生错误: {}", err);
+                restore_profile_file_contexts(&contexts).await?;
+                return Err(err.to_string().into());
+            }
+        }
+    }
+
+    if !contexts.iter().any(|context| context.affects_runtime) {
+        return Ok(ValidationOutcome::Valid);
+    }
+
+    logging!(
+        info,
+        Type::Config,
+        "[cmd配置save] 批量保存项影响当前运行时配置，开始统一应用"
+    );
+    match CoreManager::global().update_config_forced().await {
+        Ok(outcome) if outcome.is_valid() => {
+            handle::Handle::refresh_clash();
+            Ok(ValidationOutcome::Valid)
+        }
+        Ok(outcome) => {
+            logging!(warn, Type::Config, "[cmd配置save] 批量运行时配置应用失败: {}", outcome);
+            restore_profile_file_contexts(&contexts).await?;
+            handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+            Ok(outcome)
+        }
+        Err(err) => {
+            logging!(error, Type::Config, "[cmd配置save] 批量运行时配置应用错误: {}", err);
+            restore_profile_file_contexts(&contexts).await?;
+            Err(err.to_string().into())
+        }
+    }
+}
+
 async fn restore_original(file_path: &std::path::Path, original_content: &str) -> Result<(), String> {
     fs::write(file_path, original_content).await.stringify_err()
+}
+
+async fn restore_profile_file_contexts(contexts: &[ProfileOverlayFileSaveContext]) -> CmdResult {
+    for context in contexts {
+        restore_original(&context.file_path, &context.original_content).await?;
+    }
+
+    Ok(())
+}
+
+async fn prepare_profile_overlay_file_save(
+    index: String,
+    file_data: String,
+) -> CmdResult<ProfileOverlayFileSaveContext> {
+    let (rel_path, is_merge_file, is_script_file, affects_runtime) = {
+        let profiles = Config::profiles().await;
+        let profiles_guard = profiles.latest_arc();
+        let item = profiles_guard.get_item(&index).stringify_err()?;
+        let is_overlay_file = item
+            .itype
+            .as_ref()
+            .is_some_and(|t| matches!(t.as_str(), "rules" | "proxies" | "groups"));
+        if !is_overlay_file {
+            return Err("save_profile_overlay_files only supports rules/proxies/groups overlay files".into());
+        }
+        let is_merge = item.itype.as_ref().is_some_and(|t| t == "merge");
+        let path = item.file.clone().ok_or("file field is null")?;
+        let is_script = item.itype.as_ref().is_some_and(|t| t == "script") || path.ends_with(".js");
+        let affects_runtime = profile_affects_runtime(&profiles_guard, &index);
+        (path, is_merge, is_script, affects_runtime)
+    };
+
+    let original_content = PrfItem {
+        file: Some(rel_path.clone()),
+        ..Default::default()
+    }
+    .read_file()
+    .await
+    .stringify_err()?;
+
+    let profiles_dir = dirs::app_profiles_dir().stringify_err()?;
+    let file_path = profiles_dir.join(rel_path.as_str());
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    Ok(ProfileOverlayFileSaveContext {
+        file_data,
+        original_content,
+        file_path,
+        file_path_str: file_path_str.into(),
+        is_merge_file,
+        is_script_file,
+        affects_runtime,
+    })
+}
+
+const fn validation_notice_target(context: &ProfileOverlayFileSaveContext) -> ValidationNoticeTarget {
+    if context.is_script_file {
+        ValidationNoticeTarget::Script
+    } else if context.is_merge_file {
+        ValidationNoticeTarget::Merge
+    } else {
+        ValidationNoticeTarget::Runtime
+    }
+}
+
+const fn validation_file_type(context: &ProfileOverlayFileSaveContext) -> &'static str {
+    if context.is_script_file {
+        "脚本文件"
+    } else if context.is_merge_file {
+        "合并配置文件"
+    } else {
+        "YAML配置文件"
+    }
 }
 
 fn profile_affects_runtime(profiles: &IProfiles, index: &str) -> bool {

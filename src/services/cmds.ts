@@ -57,6 +57,18 @@ export async function saveProfileFile(index: string, fileData: string) {
   )
 }
 
+export async function saveProfileOverlayFiles(
+  files: { index: string; fileData: string }[],
+) {
+  return (
+    (
+      await invoke<ValidationOutcome>('save_profile_overlay_files', {
+        files,
+      })
+    ).status === 'valid'
+  )
+}
+
 export async function importProfile(url: string, option?: IProfileOption) {
   return invoke<void>('import_profile', {
     url,

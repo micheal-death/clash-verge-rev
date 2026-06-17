@@ -19,13 +19,13 @@ import {
   Typography,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import yaml from 'js-yaml'
 import {
   type MouseEvent,
   useCallback,
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -52,10 +52,46 @@ import {
   patchClashMode,
   readProfileFile,
   saveProfileFile,
+  saveProfileOverlayFiles,
   updateProxyChainConfigInRuntime,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import { debugLog } from '@/utils/debug'
+import {
+  dumpManualGroupDocument,
+  dumpManualProxyDocument,
+  ensureManualGroupDocumentIds,
+  ensureManualProxyDocumentIds,
+  getDuplicatedPolicyName,
+  getManualGroupIdentityMap,
+  getManualGroupNames,
+  getManualProxyDialerMap,
+  getManualProxyIdentityMap,
+  getManualProxyNames,
+  groupDependsOn,
+  mergeMaps,
+  mergeNames,
+  normalizeManualGroupDocument,
+  normalizeManualProxyDocument,
+  removePolicyFromManualGroups,
+  renameManualProxyDialerReferences,
+  renamePolicyInManualGroups,
+  type ManualGroupDocument,
+  type ManualProxyDocument,
+} from '@/utils/manual-policy-docs'
+import {
+  ensurePolicyId,
+  getPolicyId,
+  POLICY_ID_KEY,
+  type PolicyIdentityMap,
+  withNewPolicyId,
+} from '@/utils/policy-metadata'
+import { renameProfileSelectedPolicyReferences } from '@/utils/profile-selection'
+import {
+  dumpManualRules,
+  normalizeManualRules,
+  renamePolicyInManualRules,
+} from '@/utils/rule-utils'
 
 const MODES = ['rule', 'global', 'direct'] as const
 type Mode = (typeof MODES)[number]
@@ -70,18 +106,6 @@ const BUILTIN_PROXY_NAMES = new Set([
   'COMPATIBLE',
 ])
 const GROUP_POLICY_BUILTINS = ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS']
-
-type ManualProxyDocument = {
-  prepend: IProxyConfig[]
-  append: IProxyConfig[]
-  delete: string[]
-}
-
-type ManualGroupDocument = {
-  prepend: IProxyGroupConfig[]
-  append: IProxyGroupConfig[]
-  delete: string[]
-}
 
 type ManualProxyMenuState = {
   mouseX: number
@@ -98,147 +122,6 @@ type ManualGroupMenuState = {
 type DeleteDependencyDetails = {
   groupRefs: string[]
   ruleRefs: string[]
-}
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value)
-
-const hasPolicyItemName = (value: unknown): value is { name: string } =>
-  isPlainObject(value) &&
-  typeof value.name === 'string' &&
-  value.name.trim().length > 0
-
-const normalizePolicyDeleteNames = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-
-const normalizeManualProxyDocument = (data: string): ManualProxyDocument => {
-  const obj = yaml.load(data) as Partial<ManualProxyDocument> | null
-  return {
-    prepend: Array.isArray(obj?.prepend)
-      ? obj.prepend.filter((item): item is IProxyConfig =>
-          hasPolicyItemName(item),
-        )
-      : [],
-    append: Array.isArray(obj?.append)
-      ? obj.append.filter((item): item is IProxyConfig =>
-          hasPolicyItemName(item),
-        )
-      : [],
-    delete: normalizePolicyDeleteNames(obj?.delete),
-  }
-}
-
-const getManualProxyNames = (document: ManualProxyDocument) =>
-  Array.from(
-    new Set(
-      [...document.prepend, ...document.append]
-        .map((proxy) => proxy.name)
-        .filter(Boolean),
-    ),
-  )
-
-const getManualProxyDialerMap = (document: ManualProxyDocument) =>
-  Object.fromEntries(
-    [...document.prepend, ...document.append]
-      .map((proxy) => [proxy.name, (proxy as IProxyBaseConfig)['dialer-proxy']])
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[0] === 'string' &&
-          !!entry[0] &&
-          typeof entry[1] === 'string' &&
-          !!entry[1],
-      ),
-  )
-
-const dumpManualProxyDocument = (document: ManualProxyDocument) =>
-  yaml.dump(
-    {
-      prepend: document.prepend,
-      append: document.append,
-      delete: document.delete,
-    },
-    { forceQuotes: true },
-  )
-
-const normalizeManualGroupDocument = (data: string): ManualGroupDocument => {
-  const obj = yaml.load(data) as Partial<ManualGroupDocument> | null
-  return {
-    prepend: Array.isArray(obj?.prepend)
-      ? obj.prepend.filter((item): item is IProxyGroupConfig =>
-          hasPolicyItemName(item),
-        )
-      : [],
-    append: Array.isArray(obj?.append)
-      ? obj.append.filter((item): item is IProxyGroupConfig =>
-          hasPolicyItemName(item),
-        )
-      : [],
-    delete: normalizePolicyDeleteNames(obj?.delete),
-  }
-}
-
-const getManualGroupNames = (document: ManualGroupDocument) =>
-  Array.from(
-    new Set(
-      [...document.prepend, ...document.append]
-        .map((group) => group.name)
-        .filter(Boolean),
-    ),
-  )
-
-const dumpManualGroupDocument = (document: ManualGroupDocument) =>
-  yaml.dump(
-    {
-      prepend: document.prepend,
-      append: document.append,
-      delete: document.delete,
-    },
-    { forceQuotes: true },
-  )
-
-const getDuplicatedProxyName = (name: string, existingNames: string[]) => {
-  const existing = new Set(existingNames)
-  const base = `${name} copy`
-  if (!existing.has(base)) return base
-
-  let index = 2
-  while (existing.has(`${base} ${index}`)) index += 1
-  return `${base} ${index}`
-}
-
-const getDuplicatedGroupName = (name: string, existingNames: string[]) => {
-  const existing = new Set(existingNames)
-  const base = `${name} copy`
-  if (!existing.has(base)) return base
-
-  let index = 2
-  while (existing.has(`${base} ${index}`)) index += 1
-  return `${base} ${index}`
-}
-
-const groupDependsOn = (
-  dependencyMap: Map<string, string[]>,
-  startName: string,
-  targetName: string,
-) => {
-  const visited = new Set<string>()
-  const stack = [startName]
-
-  while (stack.length > 0) {
-    const current = stack.pop()
-    if (!current || visited.has(current)) continue
-
-    visited.add(current)
-
-    for (const dependency of dependencyMap.get(current) ?? []) {
-      if (dependency === targetName) return true
-      stack.push(dependency)
-    }
-  }
-
-  return false
 }
 
 const getProxyItemName = (item: unknown) => {
@@ -266,43 +149,6 @@ const getRuleLabel = (rule: Rule) => {
     .filter((item): item is string => typeof item === 'string' && !!item)
     .join(' · ')
 }
-
-const manualGroupHasDynamicPolicies = (group: IProxyGroupConfig) =>
-  (Array.isArray(group.use) && group.use.length > 0) ||
-  group['include-all'] === true ||
-  group['include-all-proxies'] === true ||
-  group['include-all-providers'] === true
-
-const removePolicyFromManualGroup = (
-  group: IProxyGroupConfig,
-  policyName: string,
-) => {
-  if (!Array.isArray(group.proxies) || !group.proxies.includes(policyName)) {
-    return group
-  }
-
-  const proxies = group.proxies.filter((proxy) => proxy !== policyName)
-  return {
-    ...group,
-    proxies:
-      proxies.length > 0 || manualGroupHasDynamicPolicies(group)
-        ? proxies
-        : ['DIRECT'],
-  }
-}
-
-const removePolicyFromManualGroups = (
-  document: ManualGroupDocument,
-  policyName: string,
-): ManualGroupDocument => ({
-  prepend: document.prepend.map((group) =>
-    removePolicyFromManualGroup(group, policyName),
-  ),
-  append: document.append.map((group) =>
-    removePolicyFromManualGroup(group, policyName),
-  ),
-  delete: document.delete,
-})
 
 const DeleteDependencyContent = (props: {
   name: string | null
@@ -395,12 +241,15 @@ const ProxyPage = () => {
       refreshProxy()
     },
   })
-  const { profiles, mutateProfiles } = useProfiles()
+  const { profiles, mutateProfiles, patchCurrent } = useProfiles()
   const [manualOpen, setManualOpen] = useState(false)
   const [manualMode, setManualMode] = useState<'add' | 'edit'>('add')
   const [activeManualProxy, setActiveManualProxy] =
     useState<IProxyConfig | null>(null)
+  const manualProxyIdCacheRef = useRef<Record<string, string>>({})
   const [manualProxyNames, setManualProxyNames] = useState<string[]>([])
+  const [manualProxyIdentityMap, setManualProxyIdentityMap] =
+    useState<PolicyIdentityMap>({})
   const [manualProxyDialerMap, setManualProxyDialerMap] = useState<
     Record<string, string>
   >({})
@@ -411,7 +260,10 @@ const ProxyPage = () => {
   const [manualGroupMode, setManualGroupMode] = useState<'add' | 'edit'>('add')
   const [activeManualGroup, setActiveManualGroup] =
     useState<IProxyGroupConfig | null>(null)
+  const manualGroupIdCacheRef = useRef<Record<string, string>>({})
   const [manualGroupNames, setManualGroupNames] = useState<string[]>([])
+  const [manualGroupIdentityMap, setManualGroupIdentityMap] =
+    useState<PolicyIdentityMap>({})
   const [manualGroupMenu, setManualGroupMenu] =
     useState<ManualGroupMenuState | null>(null)
   const [deleteGroupName, setDeleteGroupName] = useState<string | null>(null)
@@ -600,18 +452,25 @@ const ProxyPage = () => {
       const uid = proxiesUid ?? currentProfile?.option?.proxies
       if (!uid) {
         setManualProxyNames([])
+        setManualProxyIdentityMap({})
         setManualProxyDialerMap({})
         return
       }
 
       try {
         const data = await readProfileFile(uid)
-        const document = normalizeManualProxyDocument(data)
+        const ensured = ensureManualProxyDocumentIds(
+          normalizeManualProxyDocument(data),
+          manualProxyIdCacheRef.current,
+        )
+        const document = ensured.document
         setManualProxyNames(getManualProxyNames(document))
+        setManualProxyIdentityMap(getManualProxyIdentityMap(document))
         setManualProxyDialerMap(getManualProxyDialerMap(document))
       } catch (err) {
         console.warn('[ManualProxy] Failed to read manual proxies:', err)
         setManualProxyNames([])
+        setManualProxyIdentityMap({})
         setManualProxyDialerMap({})
       }
     },
@@ -623,17 +482,22 @@ const ProxyPage = () => {
       const uid = groupsUid ?? currentProfile?.option?.groups
       if (!uid) {
         setManualGroupNames([])
+        setManualGroupIdentityMap({})
         return
       }
 
       try {
         const data = await readProfileFile(uid)
-        setManualGroupNames(
-          getManualGroupNames(normalizeManualGroupDocument(data)),
+        const ensured = ensureManualGroupDocumentIds(
+          normalizeManualGroupDocument(data),
+          manualGroupIdCacheRef.current,
         )
+        setManualGroupNames(getManualGroupNames(ensured.document))
+        setManualGroupIdentityMap(getManualGroupIdentityMap(ensured.document))
       } catch (err) {
         console.warn('[ManualGroup] Failed to read manual groups:', err)
         setManualGroupNames([])
+        setManualGroupIdentityMap({})
       }
     },
     [currentProfile?.option?.groups],
@@ -675,12 +539,13 @@ const ProxyPage = () => {
         return false
       }
 
+      setManualProxyNames(getManualProxyNames(document))
+      setManualProxyIdentityMap(getManualProxyIdentityMap(document))
+      setManualProxyDialerMap(getManualProxyDialerMap(document))
       if (await enhanceProfiles()) {
         await Promise.all([refreshProxy(), refreshClashConfig()])
       }
       await mutateProfiles()
-      setManualProxyNames(getManualProxyNames(document))
-      setManualProxyDialerMap(getManualProxyDialerMap(document))
       showNotice.success('shared.feedback.notifications.saved')
       return true
     },
@@ -695,15 +560,37 @@ const ProxyPage = () => {
         return false
       }
 
+      setManualGroupNames(getManualGroupNames(document))
+      setManualGroupIdentityMap(getManualGroupIdentityMap(document))
       if (await enhanceProfiles()) {
         await Promise.all([refreshProxy(), refreshClashConfig()])
       }
       await mutateProfiles()
-      setManualGroupNames(getManualGroupNames(document))
       showNotice.success('shared.feedback.notifications.saved')
       return true
     },
     [mutateProfiles, refreshClashConfig, refreshProxy],
+  )
+
+  const updateSelectedPolicyReferences = useCallback(
+    async (oldName: string, newName: string, renameGroupName = false) => {
+      const result = renameProfileSelectedPolicyReferences(
+        currentProfile?.selected,
+        oldName,
+        newName,
+        { renameGroupName },
+      )
+
+      if (!result.changed) return
+
+      try {
+        await patchCurrent({ selected: result.selected })
+      } catch (err) {
+        console.error('[ManualPolicy] Failed to update selected policies:', err)
+        showNotice.error(err)
+      }
+    },
+    [currentProfile?.selected, patchCurrent],
   )
 
   const onAddManualProxy = useLockFn(
@@ -711,16 +598,20 @@ const ProxyPage = () => {
       try {
         const { proxiesUid } = await ensureProfileProxies(currentProfile?.uid)
         const data = await readProfileFile(proxiesUid)
-        const document = normalizeManualProxyDocument(data)
+        const document = ensureManualProxyDocumentIds(
+          normalizeManualProxyDocument(data),
+          manualProxyIdCacheRef.current,
+        ).document
+        const nextProxy = ensurePolicyId(proxy)
 
         await saveManualProxyDocument(proxiesUid, {
           prepend:
             placement === 'prepend'
-              ? [proxy, ...document.prepend]
+              ? [nextProxy, ...document.prepend]
               : document.prepend,
           append:
             placement === 'append'
-              ? [...document.append, proxy]
+              ? [...document.append, nextProxy]
               : document.append,
           delete: document.delete,
         })
@@ -734,7 +625,10 @@ const ProxyPage = () => {
     try {
       const { proxiesUid } = await ensureProfileProxies(currentProfile?.uid)
       const data = await readProfileFile(proxiesUid)
-      const document = normalizeManualProxyDocument(data)
+      const document = ensureManualProxyDocumentIds(
+        normalizeManualProxyDocument(data),
+        manualProxyIdCacheRef.current,
+      ).document
       const proxy = [...document.prepend, ...document.append].find(
         (item) => item.name === name,
       )
@@ -756,24 +650,134 @@ const ProxyPage = () => {
     if (!activeManualProxy) return
 
     try {
-      const { proxiesUid } = await ensureProfileProxies(currentProfile?.uid)
+      const { proxiesUid, groupsUid, rulesUid } = await ensureProfileProxies(
+        currentProfile?.uid,
+      )
       const data = await readProfileFile(proxiesUid)
-      const document = normalizeManualProxyDocument(data)
+      const document = ensureManualProxyDocumentIds(
+        normalizeManualProxyDocument(data),
+        manualProxyIdCacheRef.current,
+      ).document
+      const oldName = activeManualProxy.name
+      const newName = proxy.name
+      const isRenamed = oldName !== newName
+      const nextProxy = {
+        ...proxy,
+        [POLICY_ID_KEY]: getPolicyId(activeManualProxy) || getPolicyId(proxy),
+      } as IProxyConfig
       let replaced = false
       const replaceProxy = (item: IProxyConfig) => {
-        if (item.name !== activeManualProxy.name) return item
+        if (item.name !== oldName) return item
         replaced = true
-        return proxy
+        return ensurePolicyId(nextProxy)
       }
 
-      const nextDocument = {
+      const replacedDocument = {
         prepend: document.prepend.map(replaceProxy),
         append: document.append.map(replaceProxy),
         delete: document.delete,
       }
+      const nextDocument = renameManualProxyDialerReferences(
+        replacedDocument,
+        oldName,
+        newName,
+      )
 
       if (!replaced) {
         showNotice.error('profiles.modals.manualProxy.errors.notEditable')
+        return
+      }
+
+      if (isRenamed) {
+        const [groupsData, rulesData] = await Promise.all([
+          readProfileFile(groupsUid),
+          readProfileFile(rulesUid),
+        ])
+        const groupsDocument = ensureManualGroupDocumentIds(
+          normalizeManualGroupDocument(groupsData),
+          manualGroupIdCacheRef.current,
+        ).document
+        const nextGroupsDocument = renamePolicyInManualGroups(
+          groupsDocument,
+          oldName,
+          newName,
+        )
+        const rulesDocument = normalizeManualRules(rulesData)
+        const nextRulesDocument = renamePolicyInManualRules(
+          rulesDocument,
+          oldName,
+          newName,
+          rules,
+        )
+
+        const currentProxyNames = getManualProxyNames(document)
+        const nextProxyNames = getManualProxyNames(nextDocument)
+        const currentProxyIdentityMap = getManualProxyIdentityMap(document)
+        const nextProxyIdentityMap = getManualProxyIdentityMap(nextDocument)
+        const currentProxyDialerMap = getManualProxyDialerMap(document)
+        const nextProxyDialerMap = getManualProxyDialerMap(nextDocument)
+        const currentGroupNames = getManualGroupNames(groupsDocument)
+        const nextGroupNames = getManualGroupNames(nextGroupsDocument)
+        const currentGroupIdentityMap =
+          getManualGroupIdentityMap(groupsDocument)
+        const nextGroupIdentityMap =
+          getManualGroupIdentityMap(nextGroupsDocument)
+        const rollbackRenameUiState = () => {
+          setManualProxyNames(getManualProxyNames(document))
+          setManualProxyIdentityMap(getManualProxyIdentityMap(document))
+          setManualProxyDialerMap(getManualProxyDialerMap(document))
+          setManualGroupNames(getManualGroupNames(groupsDocument))
+          setManualGroupIdentityMap(getManualGroupIdentityMap(groupsDocument))
+        }
+
+        setManualProxyNames(mergeNames(currentProxyNames, nextProxyNames))
+        setManualProxyIdentityMap(
+          mergeMaps(currentProxyIdentityMap, nextProxyIdentityMap),
+        )
+        setManualProxyDialerMap(
+          mergeMaps(currentProxyDialerMap, nextProxyDialerMap),
+        )
+        setManualGroupNames(mergeNames(currentGroupNames, nextGroupNames))
+        setManualGroupIdentityMap(
+          mergeMaps(currentGroupIdentityMap, nextGroupIdentityMap),
+        )
+        let saved = false
+        try {
+          saved = await saveProfileOverlayFiles([
+            {
+              index: proxiesUid,
+              fileData: dumpManualProxyDocument(nextDocument),
+            },
+            {
+              index: groupsUid,
+              fileData: dumpManualGroupDocument(nextGroupsDocument),
+            },
+            {
+              index: rulesUid,
+              fileData: dumpManualRules(nextRulesDocument),
+            },
+          ])
+        } catch (err) {
+          rollbackRenameUiState()
+          throw err
+        }
+
+        if (!saved) {
+          rollbackRenameUiState()
+          return
+        }
+
+        await updateSelectedPolicyReferences(oldName, newName)
+        await Promise.all([refreshProxy(), refreshClashConfig()])
+        setManualProxyNames(nextProxyNames)
+        setManualProxyIdentityMap(nextProxyIdentityMap)
+        setManualProxyDialerMap(nextProxyDialerMap)
+        setManualGroupNames(nextGroupNames)
+        setManualGroupIdentityMap(nextGroupIdentityMap)
+        await mutateProfiles()
+        showNotice.success('shared.feedback.notifications.saved')
+        setActiveManualProxy(null)
+        setManualMode('add')
         return
       }
 
@@ -789,7 +793,10 @@ const ProxyPage = () => {
     try {
       const { proxiesUid } = await ensureProfileProxies(currentProfile?.uid)
       const data = await readProfileFile(proxiesUid)
-      const document = normalizeManualProxyDocument(data)
+      const document = ensureManualProxyDocumentIds(
+        normalizeManualProxyDocument(data),
+        manualProxyIdCacheRef.current,
+      ).document
       const proxy = [...document.prepend, ...document.append].find(
         (item) => item.name === name,
       )
@@ -800,10 +807,12 @@ const ProxyPage = () => {
       }
 
       setManualMode('add')
-      setActiveManualProxy({
-        ...proxy,
-        name: getDuplicatedProxyName(proxy.name, proxyNames),
-      })
+      setActiveManualProxy(
+        withNewPolicyId({
+          ...proxy,
+          name: getDuplicatedPolicyName(proxy.name, proxyNames),
+        }),
+      )
       setManualOpen(true)
     } catch (err) {
       showNotice.error(err)
@@ -822,7 +831,10 @@ const ProxyPage = () => {
         currentProfile?.uid,
       )
       const data = await readProfileFile(proxiesUid)
-      const document = normalizeManualProxyDocument(data)
+      const document = ensureManualProxyDocumentIds(
+        normalizeManualProxyDocument(data),
+        manualProxyIdCacheRef.current,
+      ).document
       const nextDocument = {
         prepend: document.prepend.filter((proxy) => proxy.name !== name),
         append: document.append.filter((proxy) => proxy.name !== name),
@@ -838,22 +850,36 @@ const ProxyPage = () => {
       }
 
       const groupsData = await readProfileFile(groupsUid)
-      const groupsDocument = normalizeManualGroupDocument(groupsData)
+      const groupsDocument = ensureManualGroupDocumentIds(
+        normalizeManualGroupDocument(groupsData),
+        manualGroupIdCacheRef.current,
+      ).document
       const nextGroupsDocument = removePolicyFromManualGroups(
         groupsDocument,
         name,
       )
       if (
-        !(await saveProfileFile(
-          groupsUid,
-          dumpManualGroupDocument(nextGroupsDocument),
-        ))
+        !(await saveProfileOverlayFiles([
+          {
+            index: proxiesUid,
+            fileData: dumpManualProxyDocument(nextDocument),
+          },
+          {
+            index: groupsUid,
+            fileData: dumpManualGroupDocument(nextGroupsDocument),
+          },
+        ]))
       ) {
         return
       }
+      setManualProxyNames(getManualProxyNames(nextDocument))
+      setManualProxyIdentityMap(getManualProxyIdentityMap(nextDocument))
+      setManualProxyDialerMap(getManualProxyDialerMap(nextDocument))
       setManualGroupNames(getManualGroupNames(nextGroupsDocument))
-
-      await saveManualProxyDocument(proxiesUid, nextDocument)
+      setManualGroupIdentityMap(getManualGroupIdentityMap(nextGroupsDocument))
+      await Promise.all([refreshProxy(), refreshClashConfig()])
+      await mutateProfiles()
+      showNotice.success('shared.feedback.notifications.saved')
       setDeleteProxyName(null)
     } catch (err) {
       showNotice.error(err)
@@ -901,16 +927,20 @@ const ProxyPage = () => {
       try {
         const { groupsUid } = await ensureProfileProxies(currentProfile?.uid)
         const data = await readProfileFile(groupsUid)
-        const document = normalizeManualGroupDocument(data)
+        const document = ensureManualGroupDocumentIds(
+          normalizeManualGroupDocument(data),
+          manualGroupIdCacheRef.current,
+        ).document
+        const nextGroup = ensurePolicyId(group)
 
         await saveManualGroupDocument(groupsUid, {
           prepend:
             placement === 'prepend'
-              ? [group, ...document.prepend]
+              ? [nextGroup, ...document.prepend]
               : document.prepend,
           append:
             placement === 'append'
-              ? [...document.append, group]
+              ? [...document.append, nextGroup]
               : document.append,
           delete: document.delete,
         })
@@ -924,7 +954,10 @@ const ProxyPage = () => {
     try {
       const { groupsUid } = await ensureProfileProxies(currentProfile?.uid)
       const data = await readProfileFile(groupsUid)
-      const document = normalizeManualGroupDocument(data)
+      const document = ensureManualGroupDocumentIds(
+        normalizeManualGroupDocument(data),
+        manualGroupIdCacheRef.current,
+      ).document
       const group = [...document.prepend, ...document.append].find(
         (item) => item.name === name,
       )
@@ -946,23 +979,103 @@ const ProxyPage = () => {
     if (!activeManualGroup) return
 
     try {
-      const { groupsUid } = await ensureProfileProxies(currentProfile?.uid)
+      const { groupsUid, rulesUid } = await ensureProfileProxies(
+        currentProfile?.uid,
+      )
       const data = await readProfileFile(groupsUid)
-      const document = normalizeManualGroupDocument(data)
+      const document = ensureManualGroupDocumentIds(
+        normalizeManualGroupDocument(data),
+        manualGroupIdCacheRef.current,
+      ).document
+      const oldName = activeManualGroup.name
+      const newName = group.name
+      const isRenamed = oldName !== newName
+      const nextGroup = ensurePolicyId({
+        ...group,
+        [POLICY_ID_KEY]: getPolicyId(activeManualGroup) || getPolicyId(group),
+      } as IProxyGroupConfig)
       let replaced = false
       const replaceGroup = (item: IProxyGroupConfig) => {
-        if (item.name !== activeManualGroup.name) return item
+        if (item.name !== oldName) return item
         replaced = true
-        return group
+        return nextGroup
       }
-      const nextDocument = {
+      const replacedDocument = {
         prepend: document.prepend.map(replaceGroup),
         append: document.append.map(replaceGroup),
         delete: document.delete,
       }
+      const nextDocument = renamePolicyInManualGroups(
+        replacedDocument,
+        oldName,
+        newName,
+      )
 
       if (!replaced) {
         showNotice.error('profiles.modals.manualGroup.errors.notEditable')
+        return
+      }
+
+      if (isRenamed) {
+        const rulesData = await readProfileFile(rulesUid)
+        const rulesDocument = normalizeManualRules(rulesData)
+        const nextRulesDocument = renamePolicyInManualRules(
+          rulesDocument,
+          oldName,
+          newName,
+          rules,
+        )
+        const prevChainGroup = localStorage.getItem('proxy-chain-group')
+
+        const currentGroupNames = getManualGroupNames(document)
+        const nextGroupNames = getManualGroupNames(nextDocument)
+        const currentGroupIdentityMap = getManualGroupIdentityMap(document)
+        const nextGroupIdentityMap = getManualGroupIdentityMap(nextDocument)
+        const rollbackRenameUiState = () => {
+          setManualGroupNames(getManualGroupNames(document))
+          setManualGroupIdentityMap(getManualGroupIdentityMap(document))
+          if (prevChainGroup === oldName) {
+            localStorage.setItem('proxy-chain-group', oldName)
+          }
+        }
+
+        setManualGroupNames(mergeNames(currentGroupNames, nextGroupNames))
+        setManualGroupIdentityMap(
+          mergeMaps(currentGroupIdentityMap, nextGroupIdentityMap),
+        )
+        if (prevChainGroup === oldName) {
+          localStorage.setItem('proxy-chain-group', newName)
+        }
+        let saved = false
+        try {
+          saved = await saveProfileOverlayFiles([
+            {
+              index: groupsUid,
+              fileData: dumpManualGroupDocument(nextDocument),
+            },
+            {
+              index: rulesUid,
+              fileData: dumpManualRules(nextRulesDocument),
+            },
+          ])
+        } catch (err) {
+          rollbackRenameUiState()
+          throw err
+        }
+
+        if (!saved) {
+          rollbackRenameUiState()
+          return
+        }
+
+        await updateSelectedPolicyReferences(oldName, newName, true)
+        await Promise.all([refreshProxy(), refreshClashConfig()])
+        setManualGroupNames(nextGroupNames)
+        setManualGroupIdentityMap(nextGroupIdentityMap)
+        await mutateProfiles()
+        showNotice.success('shared.feedback.notifications.saved')
+        setActiveManualGroup(null)
+        setManualGroupMode('add')
         return
       }
 
@@ -978,7 +1091,10 @@ const ProxyPage = () => {
     try {
       const { groupsUid } = await ensureProfileProxies(currentProfile?.uid)
       const data = await readProfileFile(groupsUid)
-      const document = normalizeManualGroupDocument(data)
+      const document = ensureManualGroupDocumentIds(
+        normalizeManualGroupDocument(data),
+        manualGroupIdCacheRef.current,
+      ).document
       const group = [...document.prepend, ...document.append].find(
         (item) => item.name === name,
       )
@@ -989,10 +1105,12 @@ const ProxyPage = () => {
       }
 
       setManualGroupMode('add')
-      setActiveManualGroup({
-        ...group,
-        name: getDuplicatedGroupName(group.name, runtimeGroupNames),
-      })
+      setActiveManualGroup(
+        withNewPolicyId({
+          ...group,
+          name: getDuplicatedPolicyName(group.name, runtimeGroupNames),
+        }),
+      )
       setManualGroupOpen(true)
     } catch (err) {
       showNotice.error(err)
@@ -1009,7 +1127,10 @@ const ProxyPage = () => {
 
       const { groupsUid } = await ensureProfileProxies(currentProfile?.uid)
       const data = await readProfileFile(groupsUid)
-      const document = normalizeManualGroupDocument(data)
+      const document = ensureManualGroupDocumentIds(
+        normalizeManualGroupDocument(data),
+        manualGroupIdCacheRef.current,
+      ).document
       const removedDocument = {
         prepend: document.prepend.filter((group) => group.name !== name),
         append: document.append.filter((group) => group.name !== name),
@@ -1195,6 +1316,8 @@ const ProxyPage = () => {
           isChainMode={isChainMode}
           chainConfigData={chainConfigData}
           editableProxyNames={manualProxyNames}
+          proxyIdentityMap={manualProxyIdentityMap}
+          groupIdentityMap={manualGroupIdentityMap}
           onEditProxy={onEditManualProxy}
           onProxyContextMenu={openManualProxyMenu}
           onGroupContextMenu={openManualGroupMenu}

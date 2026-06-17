@@ -2,6 +2,17 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  normalizeManualGroupDocument,
+  normalizeManualProxyDocument,
+} from '../src/utils/manual-policy-normalize.ts'
+import {
+  ensurePolicyId,
+  getPolicyId,
+  stripPolicyMetadata,
+  withNewPolicyId,
+} from '../src/utils/policy-metadata.ts'
+import { renameProfileSelectedPolicyReferences } from '../src/utils/profile-selection.ts'
+import {
   addRuleOverlayReplacement,
   buildEffectivePolicyOptions,
   buildEffectiveRuleRows,
@@ -14,15 +25,105 @@ import {
   isEffectiveFallbackRuleRow,
   isEffectiveManualRuleRow,
   isEffectiveOverlayDeleteRuleRow,
-  normalizeManualGroupDocument,
-  normalizeManualProxyDocument,
   normalizeManualRules,
   normalizeLogicalRuleValue,
   parseLogicalRuleItems,
+  renamePolicyInManualRules,
+  renameRulePolicyRaw,
   runtimeRuleToRaw,
   sanitizeManualRules,
   shouldShowEffectiveRuleRow,
 } from '../src/utils/rule-utils.ts'
+import {
+  createStableIdentityOrderState,
+  stabilizeIdentityOrder,
+} from '../src/utils/stable-identity-order.ts'
+
+test('creates, preserves, clones, and strips policy metadata ids', () => {
+  const proxy = { name: 'hz-home', type: 'ss' }
+  const withId = ensurePolicyId(proxy)
+  const id = getPolicyId(withId)
+
+  assert.ok(id)
+  assert.equal(getPolicyId(ensurePolicyId(withId)), id)
+
+  const duplicated = withNewPolicyId(withId)
+  assert.ok(getPolicyId(duplicated))
+  assert.notEqual(getPolicyId(duplicated), id)
+
+  assert.deepEqual(stripPolicyMetadata(withId), proxy)
+})
+
+test('renames persisted selected policy references without dropping selections', () => {
+  const selected = [
+    { name: 'Japan', now: 'old-proxy' },
+    { name: 'old-group', now: 'DIRECT' },
+    { name: 'SGP', now: 'old-group' },
+  ]
+
+  assert.deepEqual(
+    renameProfileSelectedPolicyReferences(selected, 'old-proxy', 'new-proxy'),
+    {
+      selected: [
+        { name: 'Japan', now: 'new-proxy' },
+        { name: 'old-group', now: 'DIRECT' },
+        { name: 'SGP', now: 'old-group' },
+      ],
+      changed: true,
+    },
+  )
+
+  assert.deepEqual(
+    renameProfileSelectedPolicyReferences(selected, 'old-group', 'new-group', {
+      renameGroupName: true,
+    }),
+    {
+      selected: [
+        { name: 'Japan', now: 'old-proxy' },
+        { name: 'new-group', now: 'DIRECT' },
+        { name: 'SGP', now: 'new-group' },
+      ],
+      changed: true,
+    },
+  )
+})
+
+test('migrates stable identity order in place and prunes stale keys', () => {
+  const state = createStableIdentityOrderState()
+  const identityMap: Record<string, string> = {}
+  const getIdentity = (item: { name: string }) =>
+    identityMap[item.name] ?? `runtime:${item.name}`
+
+  assert.deepEqual(
+    stabilizeIdentityOrder(
+      [{ name: 'a' }, { name: 'b' }, { name: 'c' }],
+      state,
+      getIdentity,
+    ).map((item) => item.name),
+    ['a', 'b', 'c'],
+  )
+
+  identityMap.b = 'manual:b'
+  assert.deepEqual(
+    stabilizeIdentityOrder(
+      [{ name: 'a' }, { name: 'b' }, { name: 'c' }],
+      state,
+      getIdentity,
+    ).map((item) => item.name),
+    ['a', 'b', 'c'],
+  )
+  assert.deepEqual(state.order, ['runtime:a', 'manual:b', 'runtime:c'])
+
+  assert.deepEqual(
+    stabilizeIdentityOrder(
+      [{ name: 'b' }, { name: 'c' }],
+      state,
+      getIdentity,
+    ).map((item) => item.name),
+    ['b', 'c'],
+  )
+  assert.deepEqual(state.order, ['manual:b', 'runtime:c'])
+})
 
 test('builds canonical logical rule values from structured sub-rules', () => {
   assert.equal(
@@ -213,6 +314,90 @@ test('builds rule rows from editor forms and runtime rules consistently', () => 
     }),
     'PROCESS-PATH,/Applications/Foo.app/Contents/MacOS/foo,DIRECT',
   )
+})
+
+test('renames only the policy portion of manual rule raws', () => {
+  assert.equal(
+    renameRulePolicyRaw(
+      'PROCESS-PATH,/Applications/hz-home.app/Contents/MacOS/hz-home,hz-home',
+      'hz-home',
+      'hz-office',
+    ),
+    'PROCESS-PATH,/Applications/hz-home.app/Contents/MacOS/hz-home,hz-office',
+  )
+})
+
+test('renames manual rule policies and overlays runtime rule replacements', () => {
+  const renamed = renamePolicyInManualRules(
+    {
+      prepend: [
+        {
+          raw: 'DOMAIN,manual.example,hz-home',
+          enabled: true,
+        },
+      ],
+      append: [],
+      delete: [],
+    },
+    'hz-home',
+    'hz-office',
+    [
+      {
+        type: 'ProcessPath',
+        payload: '/Applications/hz-home.app/Contents/MacOS/hz-home',
+        proxy: 'hz-home',
+      },
+    ],
+  )
+
+  assert.deepEqual(renamed.prepend, [
+    {
+      raw: 'PROCESS-PATH,/Applications/hz-home.app/Contents/MacOS/hz-home,hz-office',
+      enabled: true,
+    },
+    {
+      raw: 'DOMAIN,manual.example,hz-office',
+      enabled: true,
+    },
+  ])
+  assert.deepEqual(renamed.append, [])
+  assert.deepEqual(renamed.delete, [
+    'PROCESS-PATH,/Applications/hz-home.app/Contents/MacOS/hz-home,hz-home',
+    'PROCESS-PATH,/Applications/hz-home.app/Contents/MacOS/hz-home,hz-office',
+  ])
+})
+
+test('does not overlay runtime rows that already come from manual rules', () => {
+  const renamed = renamePolicyInManualRules(
+    {
+      prepend: [],
+      append: [
+        {
+          raw: 'DOMAIN,manual.example,hz-home',
+          enabled: true,
+        },
+      ],
+      delete: [],
+    },
+    'hz-home',
+    'hz-office',
+    [
+      {
+        type: 'Domain',
+        payload: 'manual.example',
+        proxy: 'hz-home',
+      },
+    ],
+  )
+
+  assert.deepEqual(renamed.prepend, [])
+  assert.deepEqual(renamed.append, [
+    {
+      raw: 'DOMAIN,manual.example,hz-office',
+      enabled: true,
+    },
+  ])
+  assert.deepEqual(renamed.delete, [])
 })
 
 test('builds source-aware effective rule rows without changing row ordering', () => {
