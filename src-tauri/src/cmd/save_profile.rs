@@ -112,10 +112,17 @@ pub async fn save_profile_overlay_files(files: Vec<ProfileOverlayFilePatch>) -> 
         contexts.push(prepare_profile_overlay_file_save(file.index, file.file_data).await?);
     }
 
-    for context in &contexts {
-        fs::write(&context.file_path, &context.file_data)
-            .await
-            .stringify_err()?;
+    for (index, context) in contexts.iter().enumerate() {
+        if let Err(err) = fs::write(&context.file_path, &context.file_data).await.stringify_err() {
+            logging!(
+                error,
+                Type::Config,
+                "[cmd配置save] 批量文件写入失败，开始回滚已写入文件: {}",
+                err
+            );
+            restore_profile_file_contexts(&contexts[..=index]).await?;
+            return Err(err);
+        }
     }
 
     for context in &contexts {

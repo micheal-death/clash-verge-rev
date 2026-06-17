@@ -973,11 +973,6 @@ export const renamePolicyInManualRules = (
 ): ManualRulesDocument => {
   if (oldName === newName) return document
 
-  const manualOriginalSignatures = new Set(
-    [...document.prepend, ...document.append].map((item) =>
-      getRawRuleIdentitySignature(item.raw),
-    ),
-  )
   const next: ManualRulesDocument = {
     prepend: document.prepend.map((item) => ({
       ...item,
@@ -989,19 +984,22 @@ export const renamePolicyInManualRules = (
     })),
     delete: [...document.delete],
   }
+  const nextManualSignatures = new Set(
+    [...next.prepend, ...next.append].map((item) =>
+      getRawRuleIdentitySignature(item.raw),
+    ),
+  )
 
   runtimeRules.forEach((rule) => {
     if (rule.proxy !== oldName) return
 
     const originalRaw = runtimeRuleToRaw(rule)
-    if (
-      manualOriginalSignatures.has(getRawRuleIdentitySignature(originalRaw))
-    ) {
-      return
-    }
-
     const replacementRaw = renameRulePolicyRaw(originalRaw, oldName, newName)
-    if (replacementRaw !== originalRaw) {
+    if (replacementRaw === originalRaw) return
+
+    if (nextManualSignatures.has(getRawRuleIdentitySignature(replacementRaw))) {
+      addRuleDelete(next, originalRaw)
+    } else {
       addRuleOverlayReplacement(next, originalRaw, replacementRaw)
     }
   })

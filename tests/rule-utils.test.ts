@@ -367,7 +367,7 @@ test('renames manual rule policies and overlays runtime rule replacements', () =
   ])
 })
 
-test('does not overlay runtime rows that already come from manual rules', () => {
+test('deletes duplicate base rules when a matching manual rule is renamed', () => {
   const renamed = renamePolicyInManualRules(
     {
       prepend: [],
@@ -397,7 +397,7 @@ test('does not overlay runtime rows that already come from manual rules', () => 
       enabled: true,
     },
   ])
-  assert.deepEqual(renamed.delete, [])
+  assert.deepEqual(renamed.delete, ['DOMAIN,manual.example,hz-home'])
 })
 
 test('builds source-aware effective rule rows without changing row ordering', () => {
