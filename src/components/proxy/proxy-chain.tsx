@@ -49,6 +49,7 @@ import { debugLog } from '@/utils/debug'
 interface ProxyChainItem {
   id: string
   name: string
+  identityKey?: string
   type?: string
   delay?: number
 }

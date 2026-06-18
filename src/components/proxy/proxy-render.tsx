@@ -63,6 +63,7 @@ export const ProxyRender = (props: RenderProps) => {
     isChainMode = false,
   } = props
   const { type, group, headState, proxy, proxyCol } = item
+  const groupStateKey = item.groupIdentity ?? group.name
   const { verge } = useVerge()
   const enable_group_icon = verge?.enable_group_icon ?? true
   const mode = useThemeMode()
@@ -128,7 +129,7 @@ export const ProxyRender = (props: RenderProps) => {
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
-          onHeadState(group.name, { open: !headState?.open })
+          onHeadState(groupStateKey, { open: !headState?.open })
         }}
       >
         {enable_group_icon &&
@@ -201,7 +202,7 @@ export const ProxyRender = (props: RenderProps) => {
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              onHeadState(group.name, { open: !headState?.open })
+              onHeadState(groupStateKey, { open: !headState?.open })
             }}
           >
             {headState?.open ? <ExpandLessRounded /> : <ExpandMoreRounded />}
@@ -220,7 +221,7 @@ export const ProxyRender = (props: RenderProps) => {
         headState={headState!}
         onLocation={() => onLocation(group)}
         onCheckDelay={() => onCheckAll(group.name)}
-        onHeadState={(p) => onHeadState(group.name, p)}
+        onHeadState={(p) => onHeadState(groupStateKey, p)}
       />
     )
   }

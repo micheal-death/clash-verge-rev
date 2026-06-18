@@ -82,6 +82,12 @@ import {
 import { showNotice } from '@/services/notice-service'
 import type { EffectiveRuleRow } from '@/types/effective-profile'
 import {
+  normalizeManualGroupDocument,
+  normalizeManualProxyDocument,
+  type ManualGroupDocument,
+  type ManualProxyDocument,
+} from '@/utils/manual-policy-docs'
+import {
   addRuleDelete,
   addRuleOverlayReplacement,
   buildEffectiveRuleRows,
@@ -113,8 +119,6 @@ import {
   logicalSubruleTypes,
   networkRuleValues,
   noResolveRuleTypes,
-  normalizeManualGroupDocument,
-  normalizeManualProxyDocument,
   normalizeManualRules,
   parseLogicalRuleItems,
   removeAt,
@@ -124,8 +128,6 @@ import {
   sanitizeManualRules,
   shouldShowEffectiveRuleRow,
   type LogicalRuleItem,
-  type ManualGroupDocument,
-  type ManualProxyDocument,
   type ManualRulesDocument,
   type RuleDialogKind,
   type RuleForm,

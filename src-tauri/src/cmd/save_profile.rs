@@ -11,8 +11,24 @@ use crate::{
     utils::dirs,
 };
 use clash_verge_logging::{Type, logging};
+use serde::Deserialize;
 use smartstring::alias::String;
 use tokio::fs;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileOverlayFilePatch {
+    index: String,
+    file_data: String,
+}
+
+struct ProfileOverlayFileSaveContext {
+    file_data: String,
+    original_content: String,
+    file_path: std::path::PathBuf,
+    file_path_str: String,
+    affects_runtime: bool,
+}
 
 /// 保存profiles的配置
 #[tauri::command]
@@ -83,8 +99,140 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
     Ok(changes_applied)
 }
 
+#[tauri::command]
+pub async fn save_profile_overlay_files(files: Vec<ProfileOverlayFilePatch>) -> CmdResult<ValidationOutcome> {
+    if files.is_empty() {
+        return Ok(ValidationOutcome::Valid);
+    }
+
+    let mut contexts = Vec::with_capacity(files.len());
+    for file in files {
+        contexts.push(prepare_profile_overlay_file_save(file.index, file.file_data).await?);
+    }
+
+    for (index, context) in contexts.iter().enumerate() {
+        if let Err(err) = fs::write(&context.file_path, &context.file_data).await.stringify_err() {
+            logging!(
+                error,
+                Type::Config,
+                "[cmd配置save] 批量文件写入失败，开始回滚已写入文件: {}",
+                err
+            );
+            restore_profile_file_contexts(&contexts[..=index]).await?;
+            return Err(err);
+        }
+    }
+
+    for context in &contexts {
+        logging!(
+            info,
+            Type::Config,
+            "[cmd配置save] 开始批量文件验证: {}",
+            context.file_path_str
+        );
+
+        match CoreConfigValidator::validate_config_file_outcome(&context.file_path_str, Some(false)).await {
+            Ok(outcome) if outcome.is_valid() => {
+                logging!(
+                    info,
+                    Type::Config,
+                    "[cmd配置save] 批量文件验证通过: {}",
+                    context.file_path_str
+                );
+            }
+            Ok(outcome) => {
+                logging!(warn, Type::Config, "[cmd配置save] 批量文件验证失败: {}", outcome);
+                restore_profile_file_contexts(&contexts).await?;
+                handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "YAML配置文件");
+                return Ok(outcome);
+            }
+            Err(err) => {
+                logging!(error, Type::Config, "[cmd配置save] 批量验证过程发生错误: {}", err);
+                restore_profile_file_contexts(&contexts).await?;
+                return Err(err.to_string().into());
+            }
+        }
+    }
+
+    if !contexts.iter().any(|context| context.affects_runtime) {
+        return Ok(ValidationOutcome::Valid);
+    }
+
+    logging!(
+        info,
+        Type::Config,
+        "[cmd配置save] 批量保存项影响当前运行时配置，开始统一应用"
+    );
+    match CoreManager::global().update_config_forced().await {
+        Ok(outcome) if outcome.is_valid() => {
+            handle::Handle::refresh_clash();
+            Ok(ValidationOutcome::Valid)
+        }
+        Ok(outcome) => {
+            logging!(warn, Type::Config, "[cmd配置save] 批量运行时配置应用失败: {}", outcome);
+            restore_profile_file_contexts(&contexts).await?;
+            handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+            Ok(outcome)
+        }
+        Err(err) => {
+            logging!(error, Type::Config, "[cmd配置save] 批量运行时配置应用错误: {}", err);
+            restore_profile_file_contexts(&contexts).await?;
+            Err(err.to_string().into())
+        }
+    }
+}
+
 async fn restore_original(file_path: &std::path::Path, original_content: &str) -> Result<(), String> {
     fs::write(file_path, original_content).await.stringify_err()
+}
+
+async fn restore_profile_file_contexts(contexts: &[ProfileOverlayFileSaveContext]) -> CmdResult {
+    for context in contexts {
+        restore_original(&context.file_path, &context.original_content).await?;
+    }
+
+    Ok(())
+}
+
+async fn prepare_profile_overlay_file_save(
+    index: String,
+    file_data: String,
+) -> CmdResult<ProfileOverlayFileSaveContext> {
+    let (rel_path, affects_runtime) = {
+        let profiles = Config::profiles().await;
+        let profiles_guard = profiles.latest_arc();
+        let item = profiles_guard.get_item(&index).stringify_err()?;
+        let is_overlay_file = item
+            .itype
+            .as_ref()
+            .is_some_and(|t| matches!(t.as_str(), "rules" | "proxies" | "groups"));
+        if !is_overlay_file {
+            return Err("save_profile_overlay_files only supports rules/proxies/groups overlay files".into());
+        }
+        let path = item.file.clone().ok_or("file field is null")?;
+        let affects_runtime = profile_affects_runtime(&profiles_guard, &index);
+        (path, affects_runtime)
+    };
+
+    let original_content = PrfItem {
+        file: Some(rel_path.clone()),
+        ..Default::default()
+    }
+    .read_file()
+    .await
+    .stringify_err()?;
+
+    let profiles_dir = dirs::app_profiles_dir().stringify_err()?;
+    let file_path = profiles_dir.join(rel_path.as_str());
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    Ok(ProfileOverlayFileSaveContext {
+        file_data,
+        original_content,
+        file_path,
+        file_path_str: file_path_str.into(),
+        affects_runtime,
+    })
 }
 
 fn profile_affects_runtime(profiles: &IProfiles, index: &str) -> bool {
