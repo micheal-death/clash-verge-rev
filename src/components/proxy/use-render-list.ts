@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
-import { useRuntimeProxyGroups } from '@/hooks/use-runtime-proxy-groups'
+import {
+  EMPTY_SELECTION_OVERRIDES,
+  useRuntimeProxyGroups,
+} from '@/hooks/use-runtime-proxy-groups'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppRefreshers, useProxiesData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
@@ -115,7 +118,7 @@ export const useRenderList = (
   selectedGroup?: string | null,
   proxyIdentityMap: Record<string, string> = {},
   groupIdentityMap: Record<string, string> = {},
-  selectionOverrides: Record<string, string> = {},
+  selectionOverrides: Record<string, string> = EMPTY_SELECTION_OVERRIDES,
 ) => {
   // 使用全局数据提供者
   const { proxies: proxiesData } = useProxiesData()
