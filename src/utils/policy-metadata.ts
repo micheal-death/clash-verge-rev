@@ -46,9 +46,11 @@ export const ensurePolicyIds = <T extends PolicyItem>(items: T[]) => {
 }
 
 export const stripPolicyMetadata = <T extends PolicyItem>(item: T): T => {
-  if (!getPolicyId(item)) return item
+  if (!item || typeof item !== 'object') return item
+  const record = item as T & Record<string, unknown>
+  if (!Object.prototype.hasOwnProperty.call(record, POLICY_ID_KEY)) return item
 
-  const { [POLICY_ID_KEY]: _id, ...rest } = item as T & Record<string, unknown>
+  const { [POLICY_ID_KEY]: _id, ...rest } = record
   return rest as T
 }
 

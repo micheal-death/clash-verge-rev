@@ -27,8 +27,6 @@ struct ProfileOverlayFileSaveContext {
     original_content: String,
     file_path: std::path::PathBuf,
     file_path_str: String,
-    is_merge_file: bool,
-    is_script_file: bool,
     affects_runtime: bool,
 }
 
@@ -133,9 +131,7 @@ pub async fn save_profile_overlay_files(files: Vec<ProfileOverlayFilePatch>) -> 
             context.file_path_str
         );
 
-        match CoreConfigValidator::validate_config_file_outcome(&context.file_path_str, Some(context.is_merge_file))
-            .await
-        {
+        match CoreConfigValidator::validate_config_file_outcome(&context.file_path_str, Some(false)).await {
             Ok(outcome) if outcome.is_valid() => {
                 logging!(
                     info,
@@ -147,11 +143,7 @@ pub async fn save_profile_overlay_files(files: Vec<ProfileOverlayFilePatch>) -> 
             Ok(outcome) => {
                 logging!(warn, Type::Config, "[cmd配置save] 批量文件验证失败: {}", outcome);
                 restore_profile_file_contexts(&contexts).await?;
-                handle_validation_notice(
-                    &outcome,
-                    validation_notice_target(context),
-                    validation_file_type(context),
-                );
+                handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "YAML配置文件");
                 return Ok(outcome);
             }
             Err(err) => {
@@ -206,7 +198,7 @@ async fn prepare_profile_overlay_file_save(
     index: String,
     file_data: String,
 ) -> CmdResult<ProfileOverlayFileSaveContext> {
-    let (rel_path, is_merge_file, is_script_file, affects_runtime) = {
+    let (rel_path, affects_runtime) = {
         let profiles = Config::profiles().await;
         let profiles_guard = profiles.latest_arc();
         let item = profiles_guard.get_item(&index).stringify_err()?;
@@ -217,11 +209,9 @@ async fn prepare_profile_overlay_file_save(
         if !is_overlay_file {
             return Err("save_profile_overlay_files only supports rules/proxies/groups overlay files".into());
         }
-        let is_merge = item.itype.as_ref().is_some_and(|t| t == "merge");
         let path = item.file.clone().ok_or("file field is null")?;
-        let is_script = item.itype.as_ref().is_some_and(|t| t == "script") || path.ends_with(".js");
         let affects_runtime = profile_affects_runtime(&profiles_guard, &index);
-        (path, is_merge, is_script, affects_runtime)
+        (path, affects_runtime)
     };
 
     let original_content = PrfItem {
@@ -241,30 +231,8 @@ async fn prepare_profile_overlay_file_save(
         original_content,
         file_path,
         file_path_str: file_path_str.into(),
-        is_merge_file,
-        is_script_file,
         affects_runtime,
     })
-}
-
-const fn validation_notice_target(context: &ProfileOverlayFileSaveContext) -> ValidationNoticeTarget {
-    if context.is_script_file {
-        ValidationNoticeTarget::Script
-    } else if context.is_merge_file {
-        ValidationNoticeTarget::Merge
-    } else {
-        ValidationNoticeTarget::Runtime
-    }
-}
-
-const fn validation_file_type(context: &ProfileOverlayFileSaveContext) -> &'static str {
-    if context.is_script_file {
-        "脚本文件"
-    } else if context.is_merge_file {
-        "合并配置文件"
-    } else {
-        "YAML配置文件"
-    }
 }
 
 fn profile_affects_runtime(profiles: &IProfiles, index: &str) -> bool {

@@ -217,8 +217,13 @@ export const ProxyGroups = (props: Props) => {
           getGroupIdentityKey(group) === selectedGroupIdentityRef.current,
       )?.name
     : undefined
+  const selectedGroupFromName =
+    selectedGroup &&
+    availableGroups.some((group) => group.name === selectedGroup)
+      ? selectedGroup
+      : undefined
   const activeSelectedGroup =
-    selectedGroupFromIdentity ?? selectedGroup ?? defaultRuleGroup
+    selectedGroupFromIdentity ?? selectedGroupFromName ?? defaultRuleGroup
   const editableProxyNameSet = useMemo(
     () => new Set(editableProxyNames),
     [editableProxyNames],
@@ -271,7 +276,7 @@ export const ProxyGroups = (props: Props) => {
       const next = prev.map((item) => {
         const identityKey =
           item.identityKey ??
-          (item.name ? proxyIdentityMap[item.name] : undefined)
+          (item.name ? getProxyIdentityKey({ name: item.name }) : undefined)
         if (!identityKey) return item
 
         const proxy = identityToProxy.get(identityKey)
@@ -539,8 +544,18 @@ export const ProxyGroups = (props: Props) => {
       if (isChainMode) {
         // 使用函数式更新来避免状态延迟问题
         setProxyChain((prev) => {
-          // 检查是否已经存在相同名称的代理，防止重复添加
-          if (prev.some((item) => item.name === proxy.name)) {
+          const nextIdentityKey = getProxyIdentityKey(proxy)
+
+          // 检查是否已经存在相同身份的代理，防止重复添加
+          if (
+            prev.some(
+              (item) =>
+                (item.identityKey ??
+                  (item.name
+                    ? getProxyIdentityKey({ name: item.name })
+                    : '')) === nextIdentityKey,
+            )
+          ) {
             const warningMessage = t('proxies.page.chain.duplicateNode')
             setDuplicateWarning({
               open: true,
@@ -558,7 +573,7 @@ export const ProxyGroups = (props: Props) => {
           const chainItem: ProxyChainItem = {
             id: `${proxy.name}_${Date.now()}`,
             name: proxy.name,
-            identityKey: getProxyIdentityKey(proxy),
+            identityKey: nextIdentityKey,
             type: proxy.type,
             delay: delay,
           }

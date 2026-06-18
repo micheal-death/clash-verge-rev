@@ -52,6 +52,10 @@ test('creates, preserves, clones, and strips policy metadata ids', () => {
   assert.notEqual(getPolicyId(duplicated), id)
 
   assert.deepEqual(stripPolicyMetadata(withId), proxy)
+  assert.deepEqual(
+    stripPolicyMetadata({ ...proxy, 'x-verge-id': '   ' }),
+    proxy,
+  )
 })
 
 test('renames persisted selected policy references without dropping selections', () => {
