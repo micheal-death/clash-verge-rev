@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
+import { applySelectionOverride } from '../src/hooks/use-runtime-proxy-groups.ts'
 import {
   normalizeManualGroupDocument,
   normalizeManualProxyDocument,
@@ -127,6 +128,22 @@ test('migrates stable identity order in place and prunes stale keys', () => {
     ['b', 'c'],
   )
   assert.deepEqual(state.order, ['manual:b', 'runtime:c'])
+})
+
+test('applies proxy group selection overrides without mutating unchanged groups', () => {
+  const group = { name: 'Japan', now: 'aws-jp', all: ['aws-jp', 'hz-jp'] }
+
+  const overridden = applySelectionOverride(group, { Japan: 'aws-jp1' })
+
+  assert.notEqual(overridden, group)
+  assert.deepEqual(overridden, {
+    name: 'Japan',
+    now: 'aws-jp1',
+    all: ['aws-jp', 'hz-jp'],
+  })
+  assert.equal(group.now, 'aws-jp')
+  assert.equal(applySelectionOverride(group, { Japan: 'aws-jp' }), group)
+  assert.equal(applySelectionOverride(group, { SGP: 'aws-sg' }), group)
 })
 
 test('builds canonical logical rule values from structured sub-rules', () => {

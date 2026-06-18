@@ -29,7 +29,11 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { closeAllConnections, type Rule } from 'tauri-plugin-mihomo-api'
+import {
+  closeAllConnections,
+  selectNodeForGroup,
+  type Rule,
+} from 'tauri-plugin-mihomo-api'
 
 import { BaseDialog, BasePage, TooltipIcon } from '@/components/base'
 import { ManualGroupViewer } from '@/components/profile/manual-group-viewer'
@@ -106,6 +110,13 @@ const BUILTIN_PROXY_NAMES = new Set([
   'COMPATIBLE',
 ])
 const GROUP_POLICY_BUILTINS = ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS']
+const SELECTABLE_GROUP_TYPES = new Set([
+  'selector',
+  'select',
+  'urltest',
+  'url-test',
+  'fallback',
+])
 
 type ManualProxyMenuState = {
   mouseX: number
@@ -137,6 +148,10 @@ const getProxyItemName = (item: unknown) => {
 const groupUsesPolicy = (group: IProxyGroupItem | undefined, name: string) =>
   Array.isArray(group?.all) &&
   group.all.some((item) => getProxyItemName(item) === name)
+
+const isSelectableProxyGroup = (group: IProxyGroupItem | undefined) =>
+  typeof group?.type === 'string' &&
+  SELECTABLE_GROUP_TYPES.has(group.type.toLowerCase())
 
 const ruleUsesPolicy = (rule: Rule, name: string) =>
   (rule as { proxy?: unknown }).proxy === name
@@ -267,6 +282,9 @@ const ProxyPage = () => {
   const [manualGroupMenu, setManualGroupMenu] =
     useState<ManualGroupMenuState | null>(null)
   const [deleteGroupName, setDeleteGroupName] = useState<string | null>(null)
+  const [selectionOverrides, setSelectionOverrides] = useState<
+    Record<string, string>
+  >({})
 
   const updateChainConfigData = useCallback((value: string | null) => {
     dispatchChainConfigData(value)
@@ -583,14 +601,99 @@ const ProxyPage = () => {
 
       if (!result.changed) return
 
-      try {
-        await patchCurrent({ selected: result.selected })
-      } catch (err) {
-        console.error('[ManualPolicy] Failed to update selected policies:', err)
-        showNotice.error(err)
-      }
+      await patchCurrent({ selected: result.selected })
     },
     [currentProfile?.selected, patchCurrent],
+  )
+
+  const getGroupsSelectingPolicy = useCallback(
+    (policyName: string) =>
+      [
+        proxiesData?.global,
+        ...((proxiesData?.groups ?? []) as IProxyGroupItem[]),
+      ]
+        .filter(
+          (group): group is IProxyGroupItem =>
+            isSelectableProxyGroup(group) &&
+            group.now === policyName &&
+            groupUsesPolicy(group, policyName),
+        )
+        .map((group) => group.name),
+    [proxiesData?.global, proxiesData?.groups],
+  )
+
+  const restoreRenamedPolicySelection = useCallback(
+    async (groupNames: string[], newName: string) => {
+      if (groupNames.length === 0) return []
+
+      const results = await Promise.all(
+        groupNames.map(async (groupName) => {
+          try {
+            await selectNodeForGroup(groupName, newName)
+            return null
+          } catch (err) {
+            console.warn(
+              `[ManualPolicy] Failed to restore ${groupName} selection to ${newName}:`,
+              err,
+            )
+            return groupName
+          }
+        }),
+      )
+
+      return results.filter((groupName): groupName is string => !!groupName)
+    },
+    [],
+  )
+
+  const showManualPolicySaveNotice = useCallback(
+    (failedSelectionGroupNames: string[]) => {
+      if (failedSelectionGroupNames.length > 0) {
+        showNotice.error(
+          `Saved, but failed to restore selection for: ${failedSelectionGroupNames.join(', ')}. Please reselect manually.`,
+        )
+        return
+      }
+
+      showNotice.success('shared.feedback.notifications.saved')
+    },
+    [],
+  )
+
+  const setRenamedPolicySelectionOverrides = useCallback(
+    (groupNames: string[], newName: string) => {
+      if (groupNames.length === 0) return
+
+      setSelectionOverrides((prev) => {
+        const next = { ...prev }
+        for (const groupName of groupNames) {
+          next[groupName] = newName
+        }
+        return next
+      })
+    },
+    [],
+  )
+
+  const clearRenamedPolicySelectionOverrides = useCallback(
+    (groupNames: string[], newName: string) => {
+      if (groupNames.length === 0) return
+
+      setSelectionOverrides((prev) => {
+        let changed = false
+        const next = { ...prev }
+
+        for (const groupName of groupNames) {
+          if (next[groupName] === newName) {
+            delete next[groupName]
+            changed = true
+          }
+        }
+
+        return changed ? next : prev
+      })
+    },
+    [],
   )
 
   const onAddManualProxy = useLockFn(
@@ -722,6 +825,7 @@ const ProxyPage = () => {
           getManualGroupIdentityMap(groupsDocument)
         const nextGroupIdentityMap =
           getManualGroupIdentityMap(nextGroupsDocument)
+        const selectingGroupNames = getGroupsSelectingPolicy(oldName)
         const rollbackRenameUiState = () => {
           setManualProxyNames(getManualProxyNames(document))
           setManualProxyIdentityMap(getManualProxyIdentityMap(document))
@@ -741,6 +845,7 @@ const ProxyPage = () => {
         setManualGroupIdentityMap(
           mergeMaps(currentGroupIdentityMap, nextGroupIdentityMap),
         )
+        setRenamedPolicySelectionOverrides(selectingGroupNames, newName)
         let saved = false
         try {
           saved = await saveProfileOverlayFiles([
@@ -759,23 +864,42 @@ const ProxyPage = () => {
           ])
         } catch (err) {
           rollbackRenameUiState()
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
           throw err
         }
 
         if (!saved) {
           rollbackRenameUiState()
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
           return
         }
 
-        await updateSelectedPolicyReferences(oldName, newName)
-        await Promise.all([refreshProxy(), refreshClashConfig()])
+        let failedSelectionGroupNames: string[] = []
+        try {
+          await updateSelectedPolicyReferences(oldName, newName)
+          failedSelectionGroupNames = await restoreRenamedPolicySelection(
+            selectingGroupNames,
+            newName,
+          )
+          await Promise.all([refreshProxy(), refreshClashConfig()])
+        } catch (err) {
+          setManualProxyNames(nextProxyNames)
+          setManualProxyIdentityMap(nextProxyIdentityMap)
+          setManualProxyDialerMap(nextProxyDialerMap)
+          setManualGroupNames(nextGroupNames)
+          setManualGroupIdentityMap(nextGroupIdentityMap)
+          await mutateProfiles()
+          throw err
+        } finally {
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
+        }
         setManualProxyNames(nextProxyNames)
         setManualProxyIdentityMap(nextProxyIdentityMap)
         setManualProxyDialerMap(nextProxyDialerMap)
         setManualGroupNames(nextGroupNames)
         setManualGroupIdentityMap(nextGroupIdentityMap)
         await mutateProfiles()
-        showNotice.success('shared.feedback.notifications.saved')
+        showManualPolicySaveNotice(failedSelectionGroupNames)
         setActiveManualProxy(null)
         setManualMode('add')
         return
@@ -1031,6 +1155,7 @@ const ProxyPage = () => {
         const nextGroupNames = getManualGroupNames(nextDocument)
         const currentGroupIdentityMap = getManualGroupIdentityMap(document)
         const nextGroupIdentityMap = getManualGroupIdentityMap(nextDocument)
+        const selectingGroupNames = getGroupsSelectingPolicy(oldName)
         const rollbackRenameUiState = () => {
           setManualGroupNames(getManualGroupNames(document))
           setManualGroupIdentityMap(getManualGroupIdentityMap(document))
@@ -1046,6 +1171,7 @@ const ProxyPage = () => {
         if (prevChainGroup === oldName) {
           localStorage.setItem('proxy-chain-group', newName)
         }
+        setRenamedPolicySelectionOverrides(selectingGroupNames, newName)
         let saved = false
         try {
           saved = await saveProfileOverlayFiles([
@@ -1060,20 +1186,36 @@ const ProxyPage = () => {
           ])
         } catch (err) {
           rollbackRenameUiState()
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
           throw err
         }
 
         if (!saved) {
           rollbackRenameUiState()
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
           return
         }
 
-        await updateSelectedPolicyReferences(oldName, newName, true)
-        await Promise.all([refreshProxy(), refreshClashConfig()])
+        let failedSelectionGroupNames: string[] = []
+        try {
+          await updateSelectedPolicyReferences(oldName, newName, true)
+          failedSelectionGroupNames = await restoreRenamedPolicySelection(
+            selectingGroupNames,
+            newName,
+          )
+          await Promise.all([refreshProxy(), refreshClashConfig()])
+        } catch (err) {
+          setManualGroupNames(nextGroupNames)
+          setManualGroupIdentityMap(nextGroupIdentityMap)
+          await mutateProfiles()
+          throw err
+        } finally {
+          clearRenamedPolicySelectionOverrides(selectingGroupNames, newName)
+        }
         setManualGroupNames(nextGroupNames)
         setManualGroupIdentityMap(nextGroupIdentityMap)
         await mutateProfiles()
-        showNotice.success('shared.feedback.notifications.saved')
+        showManualPolicySaveNotice(failedSelectionGroupNames)
         setActiveManualGroup(null)
         setManualGroupMode('add')
         return
@@ -1318,6 +1460,7 @@ const ProxyPage = () => {
           editableProxyNames={manualProxyNames}
           proxyIdentityMap={manualProxyIdentityMap}
           groupIdentityMap={manualGroupIdentityMap}
+          selectionOverrides={selectionOverrides}
           onEditProxy={onEditManualProxy}
           onProxyContextMenu={openManualProxyMenu}
           onGroupContextMenu={openManualGroupMenu}
