@@ -33,6 +33,10 @@ import { delayGroup, healthcheckProxyProvider } from 'tauri-plugin-mihomo-api'
 
 import { BaseEmpty } from '@/components/base'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
+import {
+  EMPTY_SELECTION_OVERRIDES,
+  useRuntimeProxyGroups,
+} from '@/hooks/use-runtime-proxy-groups'
 import { useVerge } from '@/hooks/use-verge'
 import { useProxiesData } from '@/providers/app-data-context'
 import { calcuProxies, updateProxyChainConfigInRuntime } from '@/services/cmds'
@@ -68,6 +72,7 @@ interface Props {
   editableProxyNames?: string[]
   proxyIdentityMap?: Record<string, string>
   groupIdentityMap?: Record<string, string>
+  selectionOverrides?: Record<string, string>
   onEditProxy?: (name: string) => void
   onProxyContextMenu?: (event: MouseEvent<HTMLElement>, name: string) => void
   onGroupContextMenu?: (
@@ -136,6 +141,7 @@ export const ProxyGroups = (props: Props) => {
     editableProxyNames = EMPTY_EDITABLE_PROXY_NAMES,
     proxyIdentityMap = EMPTY_IDENTITY_MAP,
     groupIdentityMap = EMPTY_IDENTITY_MAP,
+    selectionOverrides = EMPTY_SELECTION_OVERRIDES,
     onEditProxy,
     onProxyContextMenu,
     onGroupContextMenu,
@@ -193,8 +199,14 @@ export const ProxyGroups = (props: Props) => {
       groupIdentityMap[group.name] ?? `runtime-group:${group.name}`,
     [groupIdentityMap],
   )
+  const { runtimeGroups, runtimeGlobal } =
+    useRuntimeProxyGroups<IProxyGroupItem>(
+      (proxiesData?.groups ?? []) as IProxyGroupItem[],
+      proxiesData?.global as IProxyGroupItem | undefined,
+      selectionOverrides,
+    )
   const stableGroups = useStableIdentityItems<IProxyGroupItem>(
-    ((proxiesData?.groups ?? []) as IProxyGroupItem[]).filter(Boolean),
+    runtimeGroups,
     getGroupIdentityKey,
   )
   const availableGroups = useMemo(() => {
@@ -237,9 +249,7 @@ export const ProxyGroups = (props: Props) => {
     getProxyIdentityKey,
   )
   const policyGroups = useStableIdentityItems<IProxyGroupItem>(
-    ((proxiesData?.groups ?? []) as IProxyGroupItem[]).filter(
-      (group) => !group.hidden,
-    ),
+    runtimeGroups.filter((group) => !group.hidden),
     getGroupIdentityKey,
   )
   const proxyAssetGroup = useMemo<IProxyGroupItem>(
@@ -253,10 +263,10 @@ export const ProxyGroups = (props: Props) => {
       smux: false,
       history: [],
       now: '',
-      ...(proxiesData?.global ?? {}),
+      ...(runtimeGlobal ?? {}),
       all: proxyAssets,
     }),
-    [proxiesData?.global, proxyAssets],
+    [proxyAssets, runtimeGlobal],
   )
 
   useEffect(() => {
@@ -318,6 +328,7 @@ export const ProxyGroups = (props: Props) => {
     activeSelectedGroup,
     proxyIdentityMap,
     groupIdentityMap,
+    selectionOverrides,
   )
 
   const getGroupHeadState = useCallback(
@@ -331,14 +342,13 @@ export const ProxyGroups = (props: Props) => {
   )
   const getGroupStateKeyByName = useCallback(
     (groupName: string) => {
-      const group = [
-        proxiesData?.global,
-        ...((proxiesData?.groups ?? []) as IProxyGroupItem[]),
-      ].find((item): item is IProxyGroupItem => item?.name === groupName)
+      const group = [runtimeGlobal, ...runtimeGroups].find(
+        (item): item is IProxyGroupItem => item?.name === groupName,
+      )
 
       return group ? getGroupIdentityKey(group) : `runtime-group:${groupName}`
     },
-    [getGroupIdentityKey, proxiesData?.global, proxiesData?.groups],
+    [getGroupIdentityKey, runtimeGlobal, runtimeGroups],
   )
 
   // 统代理选择

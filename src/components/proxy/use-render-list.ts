@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
+import {
+  EMPTY_SELECTION_OVERRIDES,
+  useRuntimeProxyGroups,
+} from '@/hooks/use-runtime-proxy-groups'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppRefreshers, useProxiesData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
@@ -114,6 +118,7 @@ export const useRenderList = (
   selectedGroup?: string | null,
   proxyIdentityMap: Record<string, string> = {},
   groupIdentityMap: Record<string, string> = {},
+  selectionOverrides: Record<string, string> = EMPTY_SELECTION_OVERRIDES,
 ) => {
   // 使用全局数据提供者
   const { proxies: proxiesData } = useProxiesData()
@@ -141,6 +146,11 @@ export const useRenderList = (
     (group: { name: string }) =>
       groupIdentityMap[group.name] ?? `runtime-group:${group.name}`,
     [groupIdentityMap],
+  )
+  const { runtimeGroups, runtimeGlobal } = useRuntimeProxyGroups<ProxyGroup>(
+    (proxiesData?.groups ?? []) as ProxyGroup[],
+    proxiesData?.global as ProxyGroup | undefined,
+    selectionOverrides,
   )
 
   // 确保代理数据加载
@@ -209,9 +219,7 @@ export const useRenderList = (
     // 链式代理模式下，显示代理组和其节点
     if (isChainMode && runtimeConfig && mode === 'rule') {
       // 使用正常的规则模式代理组
-      const allGroups = proxiesData.groups.length
-        ? proxiesData.groups
-        : [proxiesData.global!]
+      const allGroups = runtimeGroups.length ? runtimeGroups : [runtimeGlobal!]
 
       // 如果选择了特定代理组，只显示该组的节点
       if (selectedGroup) {
@@ -418,9 +426,7 @@ export const useRenderList = (
     // 正常模式的渲染逻辑
     const useRule = mode === 'rule' || mode === 'script'
     const sourceGroups = (
-      useRule && proxiesData.groups.length
-        ? proxiesData.groups
-        : [proxiesData.global!]
+      useRule && runtimeGroups.length ? runtimeGroups : [runtimeGlobal!]
     ) as ProxyGroup[]
     const renderGroups = stabilizeIdentityOrder(
       sourceGroups,
@@ -543,6 +549,8 @@ export const useRenderList = (
   }, [
     headStates,
     proxiesData,
+    runtimeGroups,
+    runtimeGlobal,
     mode,
     col,
     chainCol,
