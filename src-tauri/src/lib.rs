@@ -220,6 +220,12 @@ mod app_init {
 }
 
 pub fn run() {
+    #[cfg(all(target_os = "macos", not(debug_assertions), not(test), not(feature = "verge-dev")))]
+    if utils::macos_launch_guard::enforce_before_initialization() == utils::macos_launch_guard::LaunchDisposition::Exit
+    {
+        return;
+    }
+
     if app_init::init_singleton_check().is_err() {
         return;
     }

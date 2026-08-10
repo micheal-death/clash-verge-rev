@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: Menginstal layanan Clash Verge memerlukan hak administrator.
   adminUninstallPrompt: Menghapus instalasi layanan Clash Verge memerlukan hak administrator.
+launchGuard:
+  currentExeError: 'Lokasi aplikasi tidak dapat ditentukan: {error}'
+  translocated: macOS menjalankan aplikasi ini dari jalur App Translocation sementara. Pindahkan secara manual di Finder ke /Applications atau ~/Applications, lalu buka kembali.
+  ok: OK
 tray:
   dashboard: Dasbor
   ruleMode: Mode Aturan

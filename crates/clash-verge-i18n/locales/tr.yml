@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: Clash Verge hizmetini kurmak için yönetici ayrıcalıkları gerekir.
   adminUninstallPrompt: Clash Verge hizmetini kaldırmak için yönetici ayrıcalıkları gerekir.
+launchGuard:
+  currentExeError: 'Uygulamanın konumu belirlenemedi: {error}'
+  translocated: macOS bu uygulamayı geçici bir App Translocation yolundan çalıştırıyor. Finder'da uygulamayı elle /Applications veya ~/Applications dizinine taşıyın ve yeniden açın.
+  ok: Tamam
 tray:
   dashboard: Gösterge Paneli
   ruleMode: Kural Modu

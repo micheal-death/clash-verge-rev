@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: Для установки службы Clash Verge требуются права администратора.
   adminUninstallPrompt: Для удаления службы Clash Verge требуются права администратора.
+launchGuard:
+  currentExeError: 'Не удалось определить расположение приложения: {error}'
+  translocated: macOS запускает это приложение из временного пути App Translocation. Переместите его вручную в Finder в /Applications или ~/Applications, затем откройте снова.
+  ok: ОК
 tray:
   dashboard: Панель
   ruleMode: Режим правил

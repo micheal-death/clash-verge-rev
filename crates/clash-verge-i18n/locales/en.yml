@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: Installing the Clash Verge service requires administrator privileges.
   adminUninstallPrompt: Uninstalling the Clash Verge service requires administrator privileges.
+launchGuard:
+  currentExeError: 'Unable to determine the application location: {error}'
+  translocated: macOS is running this application from a temporary App Translocation path. In Finder, move it manually to /Applications or ~/Applications, then reopen it.
+  ok: OK
 tray:
   dashboard: Dashboard
   ruleMode: Rule Mode

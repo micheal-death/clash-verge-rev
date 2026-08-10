@@ -9,7 +9,7 @@ use crate::{
         handle::Handle,
         hotkey::Hotkey,
         logger::Logger,
-        service::{SERVICE_MANAGER, ServiceManager, is_service_ipc_path_exists},
+        service::{SERVICE_MANAGER, ServiceManager},
         sysopt,
         tray::Tray,
     },
@@ -20,6 +20,9 @@ use crate::{
 };
 use clash_verge_logging::{Type, logging, logging_error};
 use clash_verge_signal;
+
+#[cfg(any(not(target_os = "macos"), feature = "verge-dev"))]
+use crate::core::service::is_service_ipc_path_exists;
 
 pub mod dns;
 pub mod scheme;
@@ -180,8 +183,27 @@ pub(super) async fn init_verge_config() {
 
 pub(super) async fn init_service_manager() {
     clash_verge_service_ipc::set_config(Some(ServiceManager::config())).await;
-    if is_service_ipc_path_exists() && SERVICE_MANAGER.init().await.is_ok() {
-        logging_error!(Type::Setup, SERVICE_MANAGER.refresh().await);
+
+    #[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
+    {
+        if crate::core::service::is_macos_service_installed() {
+            logging!(
+                warn,
+                Type::Service,
+                "macOS service is installed; checking availability and migration state"
+            );
+            logging_error!(
+                Type::Setup,
+                SERVICE_MANAGER.recover_installed_service_on_startup().await
+            );
+        }
+    }
+
+    #[cfg(any(not(target_os = "macos"), feature = "verge-dev"))]
+    {
+        if is_service_ipc_path_exists() && SERVICE_MANAGER.init().await.is_ok() {
+            logging_error!(Type::Setup, SERVICE_MANAGER.refresh().await);
+        }
     }
 }
 

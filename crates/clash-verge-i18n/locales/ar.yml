@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: يتطلب تثبيت خدمة Clash Verge صلاحيات المسؤول.
   adminUninstallPrompt: يتطلب إلغاء تثبيت خدمة Clash Verge صلاحيات المسؤول.
+launchGuard:
+  currentExeError: 'تعذر تحديد موقع التطبيق: {error}'
+  translocated: يشغّل macOS هذا التطبيق من مسار App Translocation مؤقت. انقله يدويًا في Finder إلى /Applications أو ~/Applications، ثم افتحه مجددًا.
+  ok: موافق
 tray:
   dashboard: لوحة التحكم
   ruleMode: وضع القواعد
