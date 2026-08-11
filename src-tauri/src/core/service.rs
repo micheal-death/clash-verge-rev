@@ -42,20 +42,20 @@ fn service_core_path(clash_core: &str, bin_ext: &str) -> Result<PathBuf> {
     Ok(current_exe()?.with_file_name(format!("{clash_core}{bin_ext}")))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
 const MACOS_SERVICE_BUNDLE_PATH: &str =
     "/Library/PrivilegedHelperTools/io.github.clash-verge-rev.clash-verge-rev.service.bundle";
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
 const MACOS_SERVICE_PLIST_PATH: &str = "/Library/LaunchDaemons/io.github.clash-verge-rev.clash-verge-rev.service.plist";
 const SERVICE_IPC_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVICE_IPC_RETRY_DELAY: Duration = Duration::from_millis(250);
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", any(test, not(feature = "verge-dev"))))]
 fn macos_service_installation_exists_at(bundle_path: &Path, plist_path: &Path) -> bool {
     bundle_path.exists() || plist_path.exists()
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
 pub fn is_macos_service_installed() -> bool {
     macos_service_installation_exists_at(
         Path::new(MACOS_SERVICE_BUNDLE_PATH),
@@ -63,7 +63,7 @@ pub fn is_macos_service_installed() -> bool {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
 async fn probe_macos_service_on_startup() -> Result<()> {
     wait_for_service_connection()
         .await
@@ -532,7 +532,7 @@ impl ServiceManager {
         Ok(())
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
     pub async fn recover_installed_service_on_startup(&self) -> Result<()> {
         self.run_operation_without_menu(async {
             match probe_macos_service_on_startup().await {

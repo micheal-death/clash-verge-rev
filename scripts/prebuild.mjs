@@ -607,6 +607,7 @@ async function isServiceBundleCacheValid(files) {
   if (
     cached?.version !== SERVICE_VERSION ||
     cached?.target !== SIDECAR_HOST ||
+    cached?.files === null ||
     typeof cached?.files !== 'object'
   ) {
     return false

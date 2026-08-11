@@ -54,11 +54,14 @@ pub fn resolve_setup_async() {
         logging!(info, Type::ClashVergeRev, "Version: {}", env!("CARGO_PKG_VERSION"));
 
         init_startup_script().await;
+        #[cfg(all(target_os = "macos", not(feature = "verge-dev")))]
+        init_service_manager().await;
         init_verge_config().await;
         Config::verify_config_initialization().await;
         init_window().await;
 
         let core_init = AsyncHandler::spawn(|| async {
+            #[cfg(any(not(target_os = "macos"), feature = "verge-dev"))]
             init_service_manager().await;
             init_core_manager().await;
             init_system_proxy().await;

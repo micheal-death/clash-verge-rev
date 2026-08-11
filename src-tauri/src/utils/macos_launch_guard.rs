@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaunchDisposition {
@@ -7,9 +7,18 @@ pub enum LaunchDisposition {
 }
 
 fn is_app_translocated(executable: &Path) -> bool {
-    executable
-        .components()
-        .any(|component| component.as_os_str() == "AppTranslocation")
+    let Ok(relative) = executable.strip_prefix("/private/var/folders") else {
+        return false;
+    };
+    let mut components = relative.components();
+
+    matches!(components.next(), Some(Component::Normal(_)))
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && matches!(components.next(), Some(Component::Normal(value)) if value == "T")
+        && matches!(components.next(), Some(Component::Normal(value)) if value == "AppTranslocation")
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && matches!(components.next(), Some(Component::Normal(value)) if value == "d")
+        && components.next().is_some()
 }
 
 pub fn evaluate_executable(executable: &Path) -> LaunchDisposition {
@@ -63,9 +72,9 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn rejects_app_translocation_component() {
+    fn rejects_canonical_app_translocation_path() {
         let executable = Path::new(
-            "/private/var/folders/example/T/AppTranslocation/123/d/Clash Verge.app/Contents/MacOS/Clash Verge",
+            "/private/var/folders/wk/example/T/AppTranslocation/123/d/Clash Verge.app/Contents/MacOS/Clash Verge",
         );
 
         assert_eq!(evaluate_executable(executable), LaunchDisposition::Exit);
@@ -74,6 +83,13 @@ mod tests {
     #[test]
     fn ignores_similar_but_non_translocated_component() {
         let executable = Path::new("/Applications/AppTranslocation Backup/Clash Verge.app/Contents/MacOS/Clash Verge");
+
+        assert_eq!(evaluate_executable(executable), LaunchDisposition::Continue);
+    }
+
+    #[test]
+    fn allows_regular_install_inside_app_translocation_named_directory() {
+        let executable = Path::new("/Applications/AppTranslocation/Clash Verge.app/Contents/MacOS/Clash Verge");
 
         assert_eq!(evaluate_executable(executable), LaunchDisposition::Continue);
     }
