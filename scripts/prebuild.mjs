@@ -576,11 +576,9 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_LATEST_URL =
-  'https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/latest'
 const SERVICE_URL_PREFIX =
   'https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download'
-let SERVICE_VERSION
+const SERVICE_VERSION = 'v2.3.2'
 
 const SERVICE_BINARIES = [
   'clash-verge-service',
@@ -597,51 +595,51 @@ function serviceFileInfo(name) {
   }
 }
 
-function parseServiceVersionFromUrl(url) {
-  const match = url.match(/\/releases\/tag\/([^/?#]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+function serviceBundleCacheKey() {
+  return `SERVICE_BUNDLE:${SIDECAR_HOST}`
 }
 
-async function getLatestServiceVersion() {
-  if (!FORCE) {
-    const cached = await getCachedVersion('SERVICE_VERSION')
-    if (cached) {
-      SERVICE_VERSION = cached
-      return
+async function isServiceBundleCacheValid(files) {
+  if (FORCE) return false
+
+  const versionCache = await loadVersionCache()
+  const cached = versionCache[serviceBundleCacheKey()]
+  if (
+    cached?.version !== SERVICE_VERSION ||
+    cached?.target !== SIDECAR_HOST ||
+    cached?.files === null ||
+    typeof cached?.files !== 'object'
+  ) {
+    return false
+  }
+
+  for (const { targetFile, targetPath } of files) {
+    if (!fs.existsSync(targetPath)) return false
+    const actualHash = await calculateFileHash(targetPath)
+    if (!actualHash || cached.files[targetFile] !== actualHash) return false
+  }
+
+  return true
+}
+
+async function saveServiceBundleCache(files) {
+  const hashes = {}
+  for (const { targetFile, targetPath } of files) {
+    const hash = await calculateFileHash(targetPath)
+    if (!hash) {
+      throw new Error(`Unable to hash extracted service file ${targetFile}`)
     }
+    hashes[targetFile] = hash
   }
 
-  const options = {}
-  const httpProxy =
-    process.env.HTTP_PROXY ||
-    process.env.http_proxy ||
-    process.env.HTTPS_PROXY ||
-    process.env.https_proxy
-  if (httpProxy) options.agent = new HttpsProxyAgent(httpProxy)
-
-  try {
-    const response = await fetch(SERVICE_LATEST_URL, {
-      ...options,
-      method: 'GET',
-      redirect: 'follow',
-    })
-    if (!response.ok)
-      throw new Error(
-        `Failed to fetch ${SERVICE_LATEST_URL}: ${response.status}`,
-      )
-
-    SERVICE_VERSION = parseServiceVersionFromUrl(response.url)
-    if (!SERVICE_VERSION)
-      throw new Error(
-        `Unable to resolve service release tag from ${response.url}`,
-      )
-
-    log_info(`Latest service version: ${SERVICE_VERSION}`)
-    await setCachedVersion('SERVICE_VERSION', SERVICE_VERSION)
-  } catch (err) {
-    log_error('Error fetching latest service version:', err.message)
-    process.exit(1)
+  const versionCache = await loadVersionCache()
+  versionCache[serviceBundleCacheKey()] = {
+    version: SERVICE_VERSION,
+    target: SIDECAR_HOST,
+    files: hashes,
+    timestamp: Date.now(),
   }
+  await saveVersionCache(versionCache)
 }
 
 async function findExtractedFile(dir, fileName) {
@@ -666,17 +664,25 @@ async function resolveServiceBundle() {
     }
   })
 
-  if (!FORCE && files.every(({ targetPath }) => fs.existsSync(targetPath))) {
-    log_success('"clash-verge-service-ipc" already exists, skipping download')
+  if (await isServiceBundleCacheValid(files)) {
+    log_success(
+      `"clash-verge-service-ipc" ${SERVICE_VERSION} for ${SIDECAR_HOST} already exists and passed hash verification, skipping download`,
+    )
     return
   }
 
-  await getLatestServiceVersion()
+  log_info(`Using pinned service version: ${SERVICE_VERSION}`)
 
   const archiveExt = platform === 'win32' ? 'zip' : 'tar.gz'
   const archiveFile = `clash-verge-service-ipc-${SERVICE_VERSION}-${SIDECAR_HOST}.${archiveExt}`
   const downloadURL = `${SERVICE_URL_PREFIX}/${SERVICE_VERSION}/${archiveFile}`
-  const tempDir = path.join(TEMP_DIR, 'clash-verge-service-ipc')
+  // Keep extraction isolated even if independent target builds briefly overlap.
+  // Resource output paths are intentionally shared, so full builds for different
+  // targets in one checkout must still run sequentially (CI jobs use isolated checkouts).
+  const tempDir = path.join(
+    TEMP_DIR,
+    `clash-verge-service-ipc-${SIDECAR_HOST}-${process.pid}`,
+  )
   const tempArchive = path.join(tempDir, archiveFile)
 
   await fsp.mkdir(tempDir, { recursive: true })
@@ -709,6 +715,7 @@ async function resolveServiceBundle() {
       log_success(`Extracted service file: ${targetFile}`)
     }
 
+    await saveServiceBundleCache(files)
     log_success(`service bundle finished: ${archiveFile}`)
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true })

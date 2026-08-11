@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: نصب سرویس Clash Verge به دسترسی مدیر نیاز دارد.
   adminUninstallPrompt: حذف سرویس Clash Verge به دسترسی مدیر نیاز دارد.
+launchGuard:
+  currentExeError: 'مکان برنامه مشخص نشد: {error}'
+  translocated: macOS این برنامه را از یک مسیر موقت App Translocation اجرا می‌کند. آن را در Finder به‌صورت دستی به /Applications یا ~/Applications منتقل کنید و دوباره باز کنید.
+  ok: تأیید
 tray:
   dashboard: داشبورد
   ruleMode: حالت قوانین

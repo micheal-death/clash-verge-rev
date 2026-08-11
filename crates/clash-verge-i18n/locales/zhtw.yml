@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: 安裝 Clash Verge 服務需要管理員權限
   adminUninstallPrompt: 卸载 Clash Verge 服務需要管理員權限
+launchGuard:
+  currentExeError: 無法判斷應用程式位置：{error}
+  translocated: macOS 正從 App Translocation 暫存路徑執行此應用程式。請在 Finder 中將應用程式手動移至 /Applications 或 ~/Applications，然後重新開啟。
+  ok: 好
 tray:
   dashboard: 儀表板
   ruleMode: 規則模式

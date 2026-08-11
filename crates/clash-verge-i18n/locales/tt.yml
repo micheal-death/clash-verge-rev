@@ -34,6 +34,10 @@ notifications:
 service:
   adminInstallPrompt: Clash Verge хезмәтен урнаштыру өчен администратор хокуклары кирәк.
   adminUninstallPrompt: Clash Verge хезмәтен бетерү өчен администратор хокуклары кирәк.
+launchGuard:
+  currentExeError: 'Кушымтаның урнашу урынын билгеләп булмады: {error}'
+  translocated: macOS бу кушымтаны вакытлы App Translocation юлыннан эшләтә. Finder аша аны /Applications яки ~/Applications каталогына кулдан күчерегез һәм яңадан ачыгыз.
+  ok: Ярый
 tray:
   dashboard: Идарә панеле
   ruleMode: Кагыйдә режимы
