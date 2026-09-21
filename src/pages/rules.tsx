@@ -1707,10 +1707,26 @@ const RulesPage = () => {
           return
         }
 
+        // Pin this save to the profile/rules pair the guard validated. The
+        // write below can outlive a profile switch (for example a tray switch),
+        // and applying its in-memory result to the new profile would pair the
+        // new profile's load key with the old profile's document.
+        const operationProfileUid = currentProfile?.uid
+
         if (
           !(await saveProfileFile(rulesUid, dumpManualRules(sanitizedNext)))
         ) {
           await fetchManualRules()
+          return
+        }
+
+        if (
+          currentProfileUidRef.current !== operationProfileUid ||
+          manualRulesLoadedRef.current?.profileUid !== operationProfileUid ||
+          manualRulesLoadedRef.current?.rulesUid !== rulesUid
+        ) {
+          // The file was saved, but the user has moved to another profile;
+          // leave its in-memory document and runtime refresh untouched.
           return
         }
 
