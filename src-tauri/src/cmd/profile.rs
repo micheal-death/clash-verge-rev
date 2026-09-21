@@ -389,6 +389,38 @@ pub struct EnsuredProfileProxies {
 /// 确保存在可编辑配置、rules/proxies/groups 增强文件，并返回对应 uid。
 #[tauri::command]
 pub async fn ensure_profile_proxies(index: Option<String>) -> CmdResult<EnsuredProfileProxies> {
+    // Fast path: when everything already exists, resolve the uids without taking
+    // the exclusive `with_data_modify` path. That path makes the operation fail
+    // with an optimistic-lock conflict whenever another profile mutation is in
+    // flight (e.g. the rules page calling this twice on mount), which surfaced
+    // as a transient "config conflict" error on Windows.
+    {
+        let profiles = Config::profiles().await;
+        // Read committed data, not the draft: `with_data_modify` snapshots
+        // committed, so using the draft here would return a profile switch's
+        // pending `current` during its validation window.
+        let snapshot = profiles.data_arc();
+
+        if let Some(profile_uid) = index.clone().or_else(|| snapshot.get_current().cloned())
+            && let Ok(item) = snapshot.get_item(&profile_uid)
+        {
+            let option = item.option.clone().unwrap_or_default();
+            if let (Some(proxies_uid), Some(groups_uid), Some(rules_uid)) =
+                (option.proxies, option.groups, option.rules)
+                && snapshot.get_item(&proxies_uid).is_ok()
+                && snapshot.get_item(&groups_uid).is_ok()
+                && snapshot.get_item(&rules_uid).is_ok()
+            {
+                return Ok(EnsuredProfileProxies {
+                    profile_uid,
+                    proxies_uid,
+                    groups_uid,
+                    rules_uid,
+                });
+            }
+        }
+    }
+
     Config::profiles()
         .await
         .with_data_modify(|mut profiles| async move {

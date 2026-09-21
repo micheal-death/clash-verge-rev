@@ -46,7 +46,8 @@
       "duplicateTitle": "Duplicate Rule"
     },
     "validation": {
-      "required": "Rule type and proxy policy are required"
+      "required": "Rule type and proxy policy are required",
+      "notLoaded": "Rule list is still loading. Please retry in a moment."
     }
   },
   "feedback": {
