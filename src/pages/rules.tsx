@@ -94,6 +94,7 @@ import {
   buildEffectivePolicyOptions,
   buildLogicalRuleValue,
   buildRuleRaw,
+  canPersistManualRules,
   cloneManualRules,
   createManualRuleItem,
   createLogicalRuleItem,
@@ -129,6 +130,7 @@ import {
   shouldShowEffectiveRuleRow,
   type LogicalRuleItem,
   type ManualRulesDocument,
+  type ManualRulesLoadKey,
   type RuleDialogKind,
   type RuleForm,
   type RulePresetRouteState,
@@ -1386,6 +1388,23 @@ const RulesPage = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const mutateProfilesRef = useRef(mutateProfiles)
   const consumedRoutePresetKeyRef = useRef<string | null>(null)
+  // Dedupe concurrent ensure_profile_proxies calls keyed by profile uid: the
+  // optimistic-lock guarded backend mutation rejects overlapping calls, which
+  // surfaced as a transient "config conflict" error on Windows and left the
+  // manual rules unloaded. A Map (not a single slot) keeps an in-flight call for
+  // A alive across an A -> B -> A navigation. Lazily created so no throwaway Map
+  // is allocated on every render.
+  const ensureProfileProxiesInFlightRef = useRef<Map<
+    string,
+    ReturnType<typeof ensureProfileProxies>
+  > | null>(null)
+  // The latest `currentProfile.uid`, readable from async continuations so a
+  // recovery refetch can detect a profile switch that happened while it awaited.
+  const currentProfileUidRef = useRef<string | undefined>(undefined)
+  // The profile/rules file pair whose contents currently live in `manualRules`.
+  // Used to refuse saves before the manual rules have been loaded, otherwise
+  // writing an empty/stale/cross-profile base would wipe the whole rule list.
+  const manualRulesLoadedRef = useRef<ManualRulesLoadKey | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const pageVisible = useVisibility()
   const sensors = useSensors(
@@ -1407,6 +1426,12 @@ const RulesPage = () => {
     () => profiles?.items?.find((item) => item.uid === profiles.current),
     [profiles],
   )
+
+  // Declared before the manual-rules effect so a profile switch is visible to
+  // that effect's fetch on the same commit.
+  useEffect(() => {
+    currentProfileUidRef.current = currentProfile?.uid
+  }, [currentProfile?.uid])
 
   const runtimePolicyNames = useMemo(() => {
     const proxyNames = new Set<string>()
@@ -1550,22 +1575,43 @@ const RulesPage = () => {
     policyOptions,
   ])
 
+  const ensureProfileProxiesOnce = useCallback((uid?: string) => {
+    const key = uid ?? ''
+    const inFlight =
+      ensureProfileProxiesInFlightRef.current ??
+      (ensureProfileProxiesInFlightRef.current = new Map())
+    const pending = inFlight.get(key)
+
+    if (pending) {
+      return pending
+    }
+
+    const promise = ensureProfileProxies(uid).finally(() => {
+      if (inFlight.get(key) === promise) {
+        inFlight.delete(key)
+      }
+    })
+
+    inFlight.set(key, promise)
+
+    return promise
+  }, [])
+
   const ensureRulesFile = useCallback(async () => {
-    const ensured = await ensureProfileProxies(currentProfile?.uid)
-    setRulesUid(ensured.rulesUid)
+    const ensured = await ensureProfileProxiesOnce(currentProfile?.uid)
 
     if (!currentProfile?.uid || currentProfile.uid !== ensured.profileUid) {
       await mutateProfilesRef.current()
     }
 
-    return ensured.rulesUid
-  }, [currentProfile?.uid])
+    return ensured
+  }, [currentProfile?.uid, ensureProfileProxiesOnce])
 
   const loadPolicyLayerData =
     useCallback(async (): Promise<PolicyLayerData> => {
       if (!currentProfile?.uid) return emptyPolicyLayerData()
 
-      const ensured = await ensureProfileProxies(currentProfile.uid)
+      const ensured = await ensureProfileProxiesOnce(currentProfile.uid)
       const [baseProfileData, proxiesData, groupsData] = await Promise.all([
         readProfileFile(ensured.profileUid),
         readProfileFile(ensured.proxiesUid),
@@ -1589,6 +1635,7 @@ const RulesPage = () => {
       currentProfile?.option?.groups,
       currentProfile?.option?.proxies,
       currentProfile?.uid,
+      ensureProfileProxiesOnce,
     ])
 
   const releaseRuntimeSuppression = useCallback((signatures: string[]) => {
@@ -1605,15 +1652,32 @@ const RulesPage = () => {
     window.requestAnimationFrame(() => window.requestAnimationFrame(clear))
   }, [])
 
-  const fetchManualRules = useCallback(async () => {
-    try {
-      const uid = await ensureRulesFile()
-      const data = await readProfileFile(uid)
-      setManualRules(sanitizeManualRules(normalizeManualRules(data)))
-    } catch (err: any) {
-      showNotice.error(err)
-    }
-  }, [ensureRulesFile])
+  const fetchManualRules = useCallback(
+    async (isCancelled?: () => boolean) => {
+      const isStale = (profileUid: string) =>
+        isCancelled?.() || profileUid !== currentProfileUidRef.current
+
+      try {
+        const ensured = await ensureRulesFile()
+        if (isStale(ensured.profileUid)) return
+
+        setRulesUid(ensured.rulesUid)
+        const data = await readProfileFile(ensured.rulesUid)
+        if (isStale(ensured.profileUid)) return
+
+        setManualRules(sanitizeManualRules(normalizeManualRules(data)))
+        manualRulesLoadedRef.current = {
+          profileUid: ensured.profileUid,
+          rulesUid: ensured.rulesUid,
+        }
+      } catch (err: any) {
+        if (!isCancelled?.()) {
+          showNotice.error(err)
+        }
+      }
+    },
+    [ensureRulesFile],
+  )
 
   const saveManualRules = useLockFn(
     async (
@@ -1628,8 +1692,24 @@ const RulesPage = () => {
 
       try {
         const sanitizedNext = sanitizeManualRules(next)
-        const uid = rulesUid || (await ensureRulesFile())
-        if (!(await saveProfileFile(uid, dumpManualRules(sanitizedNext)))) {
+
+        // Guard against writing a document derived from an unloaded, stale, or
+        // cross-profile manual rules base, which would wipe the rule list.
+        if (
+          !canPersistManualRules(
+            manualRulesLoadedRef.current,
+            currentProfile?.uid,
+            rulesUid,
+          )
+        ) {
+          showNotice.error('rules.page.validation.notLoaded')
+          await fetchManualRules()
+          return
+        }
+
+        if (
+          !(await saveProfileFile(rulesUid, dumpManualRules(sanitizedNext)))
+        ) {
           await fetchManualRules()
           return
         }
@@ -1683,7 +1763,13 @@ const RulesPage = () => {
 
   useEffect(() => {
     if (!profiles) return
-    fetchManualRules()
+
+    let cancelled = false
+    fetchManualRules(() => cancelled)
+
+    return () => {
+      cancelled = true
+    }
   }, [fetchManualRules, profiles])
 
   useEffect(() => {
@@ -1836,6 +1922,20 @@ const RulesPage = () => {
   )
 
   const handleSubmitDialog = useLockFn(async (submittedForm?: RuleForm) => {
+    // Refuse to build a document from an unloaded, stale, or cross-profile
+    // manual rules base. Keep the dialog open so the user's input is not lost.
+    if (
+      !canPersistManualRules(
+        manualRulesLoadedRef.current,
+        currentProfile?.uid,
+        rulesUid,
+      )
+    ) {
+      showNotice.error('rules.page.validation.notLoaded')
+      await fetchManualRules()
+      return
+    }
+
     const currentForm = submittedForm ?? form
     const effectiveForm =
       dialogMode === 'edit' &&

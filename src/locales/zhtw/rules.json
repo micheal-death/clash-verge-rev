@@ -46,7 +46,8 @@
       "duplicateTitle": "Duplicate Rule"
     },
     "validation": {
-      "required": "Rule type and proxy policy are required"
+      "required": "Rule type and proxy policy are required",
+      "notLoaded": "規則列表尚未載入完成，請稍後重試"
     }
   },
   "feedback": {

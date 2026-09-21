@@ -28,6 +28,30 @@ export interface ManualRulesDocument {
   delete: string[]
 }
 
+/** Identifies the manual-rules base currently held in memory. */
+export interface ManualRulesLoadKey {
+  profileUid: string
+  rulesUid: string
+}
+
+/**
+ * Guards destructive manual-rules writes: the in-memory document may only be
+ * persisted when it was loaded from the exact profile/rules file being written.
+ * Persisting an unloaded or cross-profile base truncates the overlay file.
+ */
+export const canPersistManualRules = (
+  loaded: ManualRulesLoadKey | null | undefined,
+  profileUid: string | null | undefined,
+  rulesUid: string | null | undefined,
+): loaded is ManualRulesLoadKey =>
+  Boolean(
+    loaded &&
+      profileUid &&
+      rulesUid &&
+      loaded.profileUid === profileUid &&
+      loaded.rulesUid === rulesUid,
+  )
+
 export interface RuntimeRuleInput {
   type: string
   payload?: string | null

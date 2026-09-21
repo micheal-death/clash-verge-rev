@@ -46,7 +46,8 @@
       "duplicateTitle": "复制规则"
     },
     "validation": {
-      "required": "规则类型和代理策略不能为空"
+      "required": "规则类型和代理策略不能为空",
+      "notLoaded": "规则列表尚未加载完成，请稍后重试"
     }
   },
   "feedback": {

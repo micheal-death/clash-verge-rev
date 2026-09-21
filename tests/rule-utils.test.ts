@@ -19,6 +19,7 @@ import {
   buildEffectiveRuleRows,
   buildLogicalRuleValue,
   buildRuleRaw,
+  canPersistManualRules,
   dumpManualRules,
   getProfileRuleRaws,
   getRawRuleIdentitySignature,
@@ -824,5 +825,69 @@ delete: []
       ['duplicated', 'base', 'proxy'],
       ['duplicated-group', 'base', 'group'],
     ],
+  )
+})
+
+test('refuses to persist manual rules until the current profile rules are loaded (wipe regression)', () => {
+  const persisted = `prepend:\n  - DOMAIN,example.com,DIRECT\nappend: []\ndelete: []\n`
+  assert.equal(normalizeManualRules(persisted).prepend.length, 1)
+
+  // The page starts from emptyManualRules(), then the user adds one rule.
+  const nextFromUnloaded = sanitizeManualRules({
+    prepend: [{ raw: 'DOMAIN,new.example,DIRECT', enabled: true }],
+    append: [],
+    delete: [],
+  })
+
+  // Minimal model of the guarded save: it only writes when the in-memory
+  // document was loaded from the exact profile/rules pair being written.
+  const save = (
+    next: Parameters<typeof dumpManualRules>[0],
+    loaded: { profileUid: string; rulesUid: string } | null,
+    profileUid: string,
+    rulesUid: string,
+  ) =>
+    canPersistManualRules(loaded, profileUid, rulesUid)
+      ? dumpManualRules(next)
+      : persisted
+
+  // Loading failed => guard blocks => the existing overlay is preserved.
+  assert.equal(save(nextFromUnloaded, null, 'P1', 'R1'), persisted)
+
+  // Loaded key matches => the save proceeds and includes the new rule.
+  const allowed = save(
+    nextFromUnloaded,
+    { profileUid: 'P1', rulesUid: 'R1' },
+    'P1',
+    'R1',
+  )
+  assert.notEqual(allowed, persisted)
+  assert.equal(
+    normalizeManualRules(allowed).prepend[0].raw,
+    'DOMAIN,new.example,DIRECT',
+  )
+
+  // Cross-profile and recreated-overlay bases are rejected too.
+  assert.equal(
+    canPersistManualRules({ profileUid: 'P1', rulesUid: 'R1' }, 'P2', 'R1'),
+    false,
+  )
+  assert.equal(
+    canPersistManualRules({ profileUid: 'P1', rulesUid: 'R1' }, 'P1', 'R2'),
+    false,
+  )
+  assert.equal(
+    canPersistManualRules({ profileUid: 'P1', rulesUid: 'R1' }, 'P1', 'R1'),
+    true,
+  )
+  // No loaded key or no resolved rules uid never authorizes a write.
+  assert.equal(canPersistManualRules(null, 'P1', 'R1'), false)
+  assert.equal(
+    canPersistManualRules({ profileUid: 'P1', rulesUid: 'R1' }, 'P1', ''),
+    false,
+  )
+  assert.equal(
+    canPersistManualRules({ profileUid: 'P1', rulesUid: 'R1' }, '', 'R1'),
+    false,
   )
 })
